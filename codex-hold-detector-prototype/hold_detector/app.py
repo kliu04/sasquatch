@@ -69,7 +69,7 @@ class HoldDetectionApp:
             )
 
             if self.gemini and api_key:
-                classified = self.gemini.classify_image(
+                filtered_records, filtered_masks = self.gemini.filter_tape(
                     image_path.name,
                     image,
                     processed.records,
@@ -77,32 +77,23 @@ class HoldDetectionApp:
                     output_dir,
                     api_key,
                 )
-                classified_summary[image_path.name] = [record.to_dict() for record in classified]
+                classified_summary[image_path.name] = [record.to_dict() for record in filtered_records]
 
-                all_dir = ensure_dir(output_dir / "overlays" / "all-candidates")
-                holds_dir = ensure_dir(output_dir / "overlays" / "holds-only")
-                self.renderer.save_classified(image, classified, processed.masks, all_dir / image_path.name, True)
-                self.renderer.save_classified(image, classified, processed.masks, holds_dir / image_path.name, False)
+                filtered_dir = ensure_dir(output_dir / "overlays" / "gemini-filtered")
+                self.renderer.save_instance_ids(image, filtered_records, filtered_masks, filtered_dir / image_path.name)
 
         predictions_path = output_dir / "predictions.json"
         write_json(predictions_path, raw_summary)
         write_json(output_dir / "postprocess_summary.json", postprocess_summary)
 
         if self.gemini:
-            classified_path = output_dir / "classified_predictions.json"
-            write_json(classified_path, classified_summary)
+            filtered_path = output_dir / "filtered_predictions.json"
+            write_json(filtered_path, classified_summary)
             for image_name, records in classified_summary.items():
-                kept = len(records)
-                hold_count = sum(1 for record in records if record.get("type") not in {None, "not-hold"})
-                not_hold_count = sum(1 for record in records if record.get("type") == "not-hold")
-                failed = sum(1 for record in records if record.get("classification_status") != "ok")
-                print(
-                    f"{image_name}: {kept} candidates, {hold_count} holds, "
-                    f"{not_hold_count} not-hold, {failed} failed"
-                )
+                print(f"{image_name}: {len(records)} holds after tape removal")
             print(f"\nSaved raw predictions to {predictions_path}")
-            print(f"Saved classified predictions to {classified_path}")
-            print(f"Saved classified overlays to {output_dir / 'overlays'}")
+            print(f"Saved filtered predictions to {filtered_path}")
+            print(f"Saved filtered overlays to {output_dir / 'overlays'}")
         else:
             for image_name, records in raw_summary.items():
                 print(f"{image_name}: {len(records)} candidates after tape filter")

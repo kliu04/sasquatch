@@ -62,39 +62,10 @@ class DetectionRecord:
     mask_area_px: int
     mask_centroid: list[int]
     tape_like: bool
-    type: str | None = None
-    color: str | None = None
-    confidence: float | None = None
-    classification_status: str | None = None
-    classification_attempts: int | None = None
-    classification_error: str | None = None
     crop_paths: dict[str, str] | None = None
 
     def copy(self) -> "DetectionRecord":
         return replace(self)
-
-    def apply_classification(
-        self,
-        *,
-        hold_type: str,
-        color: str | None = None,
-        confidence: float | None = None,
-        attempts: int,
-    ) -> "DetectionRecord":
-        updated = self.copy()
-        updated.type = hold_type
-        updated.color = color
-        updated.confidence = round(confidence, 4) if confidence is not None else None
-        updated.classification_status = "ok"
-        updated.classification_attempts = attempts
-        return updated
-
-    def mark_failed(self, error: str, attempts: int) -> "DetectionRecord":
-        updated = self.copy()
-        updated.classification_status = "failed"
-        updated.classification_attempts = attempts
-        updated.classification_error = error
-        return updated
 
     def to_dict(self) -> dict[str, Any]:
         payload = {
@@ -107,18 +78,6 @@ class DetectionRecord:
             "mask_centroid": self.mask_centroid,
             "tape_like": self.tape_like,
         }
-        if self.type is not None:
-            payload["type"] = self.type
-        if self.color is not None:
-            payload["color"] = self.color
-        if self.confidence is not None:
-            payload["confidence"] = round(self.confidence, 4)
-        if self.classification_status is not None:
-            payload["classification_status"] = self.classification_status
-        if self.classification_attempts is not None:
-            payload["classification_attempts"] = self.classification_attempts
-        if self.classification_error is not None:
-            payload["classification_error"] = self.classification_error
         if self.crop_paths is not None:
             payload["crop_paths"] = self.crop_paths
         return payload
