@@ -45,6 +45,7 @@ class Wall(Base):
     user_id = Column(Integer, ForeignKey("users.id"))
     name = Column(String)
     climbs = relationship("Climb")
+    wall_img_url = Column(String)
 
 
 class Climb(Base):
@@ -55,6 +56,8 @@ class Climb(Base):
     classification = Column(Enum(Classification))
     is_favourite = Column(Boolean)
     date_sent = Column(DateTime)
+    climb_img_url = Column(String)
 
-engine = create_engine('postgresql://user:password@localhost:5432/mydb')
+engine = create_engine('postgresql://postgres:dev@34.11.229.123:5432/sasquatch')
+Base.metadata.drop_all(engine)
 Base.metadata.create_all(engine)
