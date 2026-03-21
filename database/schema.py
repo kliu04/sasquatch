@@ -54,3 +54,6 @@ class Climb(Base):
     classification = Column(Enum(Classification))
     is_favourite = Column(Boolean)
     date_sent = Column(DateTime)
+
+engine = create_engine('postgresql://user:password@localhost:5432/mydb')
+Base.metadata.create_all(engine)
