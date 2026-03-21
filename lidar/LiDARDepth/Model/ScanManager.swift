@@ -4,50 +4,48 @@ import CoreVideo
 import UIKit
 
 class ScanManager: ObservableObject {
-    @Published var isRecording = false
     @Published var isExporting = false
-    @Published var exportedFileURL: URL?
-    @Published var meshAnchorCount = 0
+    @Published var exportedFiles: [URL] = []
+    @Published var hasCaptured = false
 
     weak var arSession: ARSession?
 
-    private var capturedMeshAnchors: [ARMeshAnchor] = []
     private var capturedFrame: ARFrame?
 
-    func startRecording() {
-        capturedMeshAnchors.removeAll()
-        capturedFrame = nil
-        exportedFileURL = nil
-        meshAnchorCount = 0
-        isRecording = true
-    }
-
-    func stopRecording() {
-        isRecording = false
-        guard let frame = arSession?.currentFrame else { return }
+    func capture() {
+        guard let frame = arSession?.currentFrame,
+              frame.sceneDepth != nil else { return }
         capturedFrame = frame
-        capturedMeshAnchors = frame.anchors.compactMap { $0 as? ARMeshAnchor }
-        meshAnchorCount = capturedMeshAnchors.count
+        exportedFiles = []
+        hasCaptured = true
     }
 
     var hasMeshData: Bool {
-        !capturedMeshAnchors.isEmpty
+        hasCaptured && capturedFrame?.sceneDepth != nil
     }
 
-    func exportPLY() {
-        guard !capturedMeshAnchors.isEmpty else { return }
+    func export() {
+        guard let frame = capturedFrame, frame.sceneDepth != nil else { return }
         isExporting = true
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
             do {
-                let url = try self.writePLY()
+                let timestamp = Int(Date().timeIntervalSince1970)
+                let docsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+
+                let plyURL = docsDir.appendingPathComponent("scan_\(timestamp).ply")
+                try self.writePLY(frame: frame, to: plyURL)
+
+                let pngURL = docsDir.appendingPathComponent("scan_\(timestamp).png")
+                try self.writePNG(frame: frame, to: pngURL)
+
                 DispatchQueue.main.async {
-                    self.exportedFileURL = url
+                    self.exportedFiles = [plyURL, pngURL]
                     self.isExporting = false
                 }
             } catch {
-                print("PLY export failed: \(error)")
+                print("Export failed: \(error)")
                 DispatchQueue.main.async {
                     self.isExporting = false
                 }
@@ -57,143 +55,139 @@ class ScanManager: ObservableObject {
 
     // MARK: - PLY Writing
 
-    private func writePLY() throws -> URL {
-        var allVertices: [(x: Float, y: Float, z: Float, r: UInt8, g: UInt8, b: UInt8)] = []
-        var allFaces: [(Int, Int, Int)] = []
-        var vertexOffset = 0
+    private func writePLY(frame: ARFrame, to url: URL) throws {
+        guard let sceneDepth = frame.sceneDepth else {
+            throw NSError(domain: "ScanManager", code: 1, userInfo: [NSLocalizedDescriptionKey: "No depth data"])
+        }
 
-        // Prepare color sampling from captured camera frame
-        let colorSampler = capturedFrame.flatMap { ColorSampler(frame: $0) }
+        let depthMap = sceneDepth.depthMap
+        let colorBuffer = frame.capturedImage
+        let camera = frame.camera
+        let intrinsics = camera.intrinsics
 
-        for anchor in capturedMeshAnchors {
-            let geometry = anchor.geometry
-            let transform = anchor.transform
+        let depthWidth = CVPixelBufferGetWidth(depthMap)
+        let depthHeight = CVPixelBufferGetHeight(depthMap)
+        let colorWidth = CVPixelBufferGetWidth(colorBuffer)
+        let colorHeight = CVPixelBufferGetHeight(colorBuffer)
 
-            let vertexBuffer = geometry.vertices.buffer.contents()
-            let normalBuffer = geometry.normals.buffer.contents()
+        // Intrinsics are for the full-res color image
+        let fx = intrinsics[0][0]
+        let fy = intrinsics[1][1]
+        let cx = intrinsics[2][0]
+        let cy = intrinsics[2][1]
 
-            for i in 0..<geometry.vertices.count {
-                let vertexPtr = vertexBuffer.advanced(by: geometry.vertices.offset + geometry.vertices.stride * i)
-                let vertex = vertexPtr.assumingMemoryBound(to: SIMD3<Float>.self).pointee
+        // Scale factors to map color pixel coords into depth map coords
+        let depthScaleX = Float(depthWidth) / Float(colorWidth)
+        let depthScaleY = Float(depthHeight) / Float(colorHeight)
+
+        // Lock both buffers
+        CVPixelBufferLockBaseAddress(depthMap, .readOnly)
+        CVPixelBufferLockBaseAddress(colorBuffer, .readOnly)
+        defer {
+            CVPixelBufferUnlockBaseAddress(depthMap, .readOnly)
+            CVPixelBufferUnlockBaseAddress(colorBuffer, .readOnly)
+        }
+
+        guard let depthBase = CVPixelBufferGetBaseAddress(depthMap),
+              let yPlane = CVPixelBufferGetBaseAddressOfPlane(colorBuffer, 0),
+              let cbcrPlane = CVPixelBufferGetBaseAddressOfPlane(colorBuffer, 1) else {
+            throw NSError(domain: "ScanManager", code: 2, userInfo: [NSLocalizedDescriptionKey: "Cannot access buffers"])
+        }
+
+        let depthBytesPerRow = CVPixelBufferGetBytesPerRow(depthMap)
+        let yStride = CVPixelBufferGetBytesPerRowOfPlane(colorBuffer, 0)
+        let cbcrStride = CVPixelBufferGetBytesPerRowOfPlane(colorBuffer, 1)
+
+        // Camera transform to convert from camera space to world space
+        let cameraTransform = camera.transform
+
+        // Iterate over every color pixel, interpolate depth
+        var vertices: [(x: Float, y: Float, z: Float, r: UInt8, g: UInt8, b: UInt8)] = []
+        vertices.reserveCapacity(colorWidth * colorHeight)
+
+        for row in 0..<colorHeight {
+            for col in 0..<colorWidth {
+                // Map color pixel to depth map coordinate
+                let depthX = Float(col) * depthScaleX
+                let depthY = Float(row) * depthScaleY
+
+                // Bilinear interpolation of depth
+                let depth = bilinearSampleDepth(
+                    depthBase: depthBase, bytesPerRow: depthBytesPerRow,
+                    width: depthWidth, height: depthHeight,
+                    x: depthX, y: depthY
+                )
+
+                guard depth > 0 && depth < 10.0 else { continue }
+
+                // Unproject to 3D camera space using full-res intrinsics
+                let xCam = (Float(col) - cx) * depth / fx
+                let yCam = (Float(row) - cy) * depth / fy
+                let zCam = depth
 
                 // Transform to world space
-                let worldPos = transform * SIMD4<Float>(vertex.x, vertex.y, vertex.z, 1.0)
+                let camPoint = SIMD4<Float>(xCam, yCam, zCam, 1.0)
+                let worldPoint = cameraTransform * camPoint
 
-                // Sample color
-                let (r, g, b) = colorSampler?.sampleColor(at: SIMD3<Float>(worldPos.x, worldPos.y, worldPos.z)) ?? (128, 128, 128)
+                let (r, g, b) = sampleYCbCr(
+                    yPlane: yPlane, cbcrPlane: cbcrPlane,
+                    yStride: yStride, cbcrStride: cbcrStride,
+                    x: col, y: row
+                )
 
-                allVertices.append((worldPos.x, worldPos.y, worldPos.z, r, g, b))
+                vertices.append((worldPoint.x, worldPoint.y, worldPoint.z, r, g, b))
             }
-
-            // Read faces
-            let faceBuffer = geometry.faces.buffer.contents()
-            let bytesPerIndex = geometry.faces.bytesPerIndex
-
-            for i in 0..<geometry.faces.count {
-                let facePtr = faceBuffer.advanced(by: bytesPerIndex * 3 * i)
-
-                let idx0, idx1, idx2: Int
-                if bytesPerIndex == 4 {
-                    let ptr = facePtr.assumingMemoryBound(to: UInt32.self)
-                    idx0 = Int(ptr[0]) + vertexOffset
-                    idx1 = Int(ptr[1]) + vertexOffset
-                    idx2 = Int(ptr[2]) + vertexOffset
-                } else {
-                    let ptr = facePtr.assumingMemoryBound(to: UInt16.self)
-                    idx0 = Int(ptr[0]) + vertexOffset
-                    idx1 = Int(ptr[1]) + vertexOffset
-                    idx2 = Int(ptr[2]) + vertexOffset
-                }
-                allFaces.append((idx0, idx1, idx2))
-            }
-
-            vertexOffset += geometry.vertices.count
         }
 
-        // Write PLY
-        let fileName = "scan_\(Int(Date().timeIntervalSince1970)).ply"
-        let url = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent(fileName)
+        var ply = "ply\nformat ascii 1.0\n"
+        ply += "element vertex \(vertices.count)\n"
+        ply += "property float x\n"
+        ply += "property float y\n"
+        ply += "property float z\n"
+        ply += "property uchar red\n"
+        ply += "property uchar green\n"
+        ply += "property uchar blue\n"
+        ply += "end_header\n"
 
-        var ply = """
-        ply
-        format ascii 1.0
-        element vertex \(allVertices.count)
-        property float x
-        property float y
-        property float z
-        property uchar red
-        property uchar green
-        property uchar blue
-        element face \(allFaces.count)
-        property list uchar int vertex_indices
-        end_header\n
-        """
-
-        for v in allVertices {
+        for v in vertices {
             ply += "\(v.x) \(v.y) \(v.z) \(v.r) \(v.g) \(v.b)\n"
-        }
-        for f in allFaces {
-            ply += "3 \(f.0) \(f.1) \(f.2)\n"
         }
 
         try ply.write(to: url, atomically: true, encoding: .utf8)
-        return url
-    }
-}
-
-// MARK: - Color Sampling from Camera Frame
-
-private class ColorSampler {
-    let camera: ARCamera
-    let pixelBuffer: CVPixelBuffer
-    let imageWidth: Int
-    let imageHeight: Int
-    let viewportSize: CGSize
-
-    init?(frame: ARFrame) {
-        self.camera = frame.camera
-        self.pixelBuffer = frame.capturedImage
-        self.imageWidth = CVPixelBufferGetWidth(pixelBuffer)
-        self.imageHeight = CVPixelBufferGetHeight(pixelBuffer)
-        // Use landscape dimensions since camera captures in landscape
-        self.viewportSize = CGSize(width: imageWidth, height: imageHeight)
     }
 
-    func sampleColor(at worldPoint: SIMD3<Float>) -> (UInt8, UInt8, UInt8) {
-        // Project 3D world point to 2D image coordinates
-        let projected = camera.projectPoint(worldPoint, orientation: .landscapeRight, viewportSize: viewportSize)
+    // MARK: - PNG Writing
 
-        let px = Int(projected.x)
-        let py = Int(projected.y)
-
-        guard px >= 0 && px < imageWidth && py >= 0 && py < imageHeight else {
-            return (128, 128, 128) // default gray for out-of-frame vertices
+    private func writePNG(frame: ARFrame, to url: URL) throws {
+        let pixelBuffer = frame.capturedImage
+        let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
+        let context = CIContext()
+        guard let cgImage = context.createCGImage(ciImage, from: ciImage.extent) else {
+            throw NSError(domain: "ScanManager", code: 3, userInfo: [NSLocalizedDescriptionKey: "Failed to create image"])
         }
-
-        return samplePixel(x: px, y: py)
+        let uiImage = UIImage(cgImage: cgImage)
+        guard let pngData = uiImage.pngData() else {
+            throw NSError(domain: "ScanManager", code: 4, userInfo: [NSLocalizedDescriptionKey: "Failed to encode PNG"])
+        }
+        try pngData.write(to: url)
     }
 
-    private func samplePixel(x: Int, y: Int) -> (UInt8, UInt8, UInt8) {
-        CVPixelBufferLockBaseAddress(pixelBuffer, .readOnly)
-        defer { CVPixelBufferUnlockBaseAddress(pixelBuffer, .readOnly) }
+    // MARK: - YCbCr to RGB
 
-        // Camera frames are YCbCr (420v/420f). Sample Y plane for luminance,
-        // CbCr plane for chroma, then convert to RGB.
-        guard let yPlane = CVPixelBufferGetBaseAddressOfPlane(pixelBuffer, 0),
-              let cbcrPlane = CVPixelBufferGetBaseAddressOfPlane(pixelBuffer, 1) else {
-            return (128, 128, 128)
-        }
-
-        let yStride = CVPixelBufferGetBytesPerRowOfPlane(pixelBuffer, 0)
-        let cbcrStride = CVPixelBufferGetBytesPerRowOfPlane(pixelBuffer, 1)
-
-        let yValue = Float(yPlane.advanced(by: y * yStride + x).assumingMemoryBound(to: UInt8.self).pointee)
+    private func sampleYCbCr(
+        yPlane: UnsafeMutableRawPointer,
+        cbcrPlane: UnsafeMutableRawPointer,
+        yStride: Int, cbcrStride: Int,
+        x: Int, y: Int
+    ) -> (UInt8, UInt8, UInt8) {
+        let yValue = Float(yPlane.advanced(by: y * yStride + x)
+            .assumingMemoryBound(to: UInt8.self).pointee)
         let cbcrOffset = (y / 2) * cbcrStride + (x / 2) * 2
-        let cb = Float(cbcrPlane.advanced(by: cbcrOffset).assumingMemoryBound(to: UInt8.self).pointee) - 128.0
-        let cr = Float(cbcrPlane.advanced(by: cbcrOffset + 1).assumingMemoryBound(to: UInt8.self).pointee) - 128.0
+        let cb = Float(cbcrPlane.advanced(by: cbcrOffset)
+            .assumingMemoryBound(to: UInt8.self).pointee) - 128.0
+        let cr = Float(cbcrPlane.advanced(by: cbcrOffset + 1)
+            .assumingMemoryBound(to: UInt8.self).pointee) - 128.0
 
-        // YCbCr to RGB (BT.601)
         let r = yValue + 1.402 * cr
         let g = yValue - 0.344136 * cb - 0.714136 * cr
         let b = yValue + 1.772 * cb
@@ -203,5 +197,37 @@ private class ColorSampler {
             UInt8(clamping: Int(g)),
             UInt8(clamping: Int(b))
         )
+    }
+
+    // MARK: - Nearest-Max Depth Sampling
+
+    private func bilinearSampleDepth(
+        depthBase: UnsafeMutableRawPointer,
+        bytesPerRow: Int,
+        width: Int, height: Int,
+        x: Float, y: Float
+    ) -> Float {
+        let x0 = Int(x)
+        let y0 = Int(y)
+        let x1 = min(x0 + 1, width - 1)
+        let y1 = min(y0 + 1, height - 1)
+
+        func depthAt(_ col: Int, _ row: Int) -> Float {
+            depthBase.advanced(by: row * bytesPerRow + col * MemoryLayout<Float32>.size)
+                .assumingMemoryBound(to: Float32.self).pointee
+        }
+
+        let d00 = depthAt(x0, y0)
+        let d10 = depthAt(x1, y0)
+        let d01 = depthAt(x0, y1)
+        let d11 = depthAt(x1, y1)
+
+        // Use max of valid neighbors — makes surfaces jut out more
+        var maxDepth: Float = 0
+        if d00 > 0 { maxDepth = max(maxDepth, d00) }
+        if d10 > 0 { maxDepth = max(maxDepth, d10) }
+        if d01 > 0 { maxDepth = max(maxDepth, d01) }
+        if d11 > 0 { maxDepth = max(maxDepth, d11) }
+        return maxDepth
     }
 }

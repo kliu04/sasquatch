@@ -9,8 +9,8 @@ struct ARViewContainer: UIViewRepresentable {
         sceneView.automaticallyUpdatesLighting = true
 
         let configuration = ARWorldTrackingConfiguration()
-        if ARWorldTrackingConfiguration.supportsSceneReconstruction(.mesh) {
-            configuration.sceneReconstruction = .mesh
+        if ARWorldTrackingConfiguration.supportsFrameSemantics(.sceneDepth) {
+            configuration.frameSemantics.insert(.sceneDepth)
         }
         configuration.environmentTexturing = .automatic
 
