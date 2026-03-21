@@ -3,3 +3,5 @@ torchvision
 opencv-python
 PyYAML
 google-genai
+sqlalchemy
+psycopg2
