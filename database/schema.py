@@ -44,6 +44,7 @@ class Wall(Base):
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id"))
     name = Column(String)
+    climbs = relationship("Climb")
 
 
 class Climb(Base):
