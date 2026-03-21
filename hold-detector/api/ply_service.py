@@ -6,27 +6,9 @@ import numpy as np
 import open3d as o3d
 
 
-def discover_ply_files(scan_dir: Path) -> list[Path]:
-    """Return all .ply files under scan_dir, sorted numerically by filename."""
-    return sorted(scan_dir.rglob("*.ply"), key=lambda p: p.stem)
-
-
-def merge_point_clouds(
-    ply_paths: list[Path],
-    voxel_size: float = 0.002,
-) -> o3d.geometry.PointCloud:
-    """Load and merge multiple PLY files into a single point cloud.
-
-    ARKit scans already share a world coordinate frame, so frames are concatenated
-    directly (F3D-style) without ICP. A minimal voxel downsample (0.002m) is used
-    only to remove exact duplicate points from heavily overlapping regions while
-    preserving enough density for a solid rendered image.
-    """
-    merged = o3d.geometry.PointCloud()
-    for p in ply_paths:
-        merged += o3d.io.read_point_cloud(str(p))
-    merged = merged.voxel_down_sample(voxel_size)
-    return merged
+def load_point_cloud(ply_path: Path) -> o3d.geometry.PointCloud:
+    """Load a single PLY file into a point cloud."""
+    return o3d.io.read_point_cloud(str(ply_path))
 
 
 def render_point_cloud(

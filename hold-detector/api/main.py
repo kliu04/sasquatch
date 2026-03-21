@@ -11,7 +11,7 @@ import numpy as np
 from fastapi import FastAPI, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 
-from api.ply_service import discover_ply_files, merge_point_clouds, pixel_to_3d, render_point_cloud
+from api.ply_service import load_point_cloud, pixel_to_3d, render_point_cloud
 from api.schemas import BBox, Hold, HoldsResponse, Position3D, ScanResponse
 from hold_detector.app import HoldDetectionApp
 from hold_detector.config import (
@@ -34,8 +34,8 @@ _BASE_DIR = Path(__file__).parent.parent  # hold-detector/
 class ScanState:
     scan_id: str
     scan_dir: Path
-    ply_paths: list[Path]
-    merged_pcd: Any | None = None
+    ply_path: Path
+    pcd: Any | None = None
     rendered_image: np.ndarray | None = None
     cam_params: Any | None = None
 
@@ -74,7 +74,7 @@ def _default_config() -> AppConfig:
         ),
         gemini=GeminiConfig(
             enabled=True,
-            model="gemini-3-flash-preview",
+            model="gemini-3.1-flash-lite-preview",
             api_key=None,
             api_key_env="HOLD_CLASSIFICATION_KEY_GEMINI",
             concurrency=100,
@@ -110,12 +110,12 @@ def _get_scan(scan_id: str) -> ScanState:
 
 
 def _ensure_projection(state: ScanState) -> None:
-    """Merge + render the point cloud if not already cached."""
+    """Load + render the point cloud if not already cached."""
     if state.rendered_image is not None:
         return
-    pcd = merge_point_clouds(state.ply_paths)
+    pcd = load_point_cloud(state.ply_path)
     image_bgr, cam_params = render_point_cloud(pcd)
-    state.merged_pcd = pcd
+    state.pcd = pcd
     state.rendered_image = image_bgr
     state.cam_params = cam_params
 
@@ -126,29 +126,25 @@ def _ensure_projection(state: ScanState) -> None:
 
 
 @app.post("/scans", response_model=ScanResponse, status_code=201)
-async def register_scan(files: list[UploadFile]):
-    """Upload one or more .ply files to create a new scan resource."""
+async def register_scan(file: UploadFile):
+    """Upload a single .ply file to create a new scan resource."""
+    if not (file.filename or "").lower().endswith(".ply"):
+        raise HTTPException(status_code=400, detail=f"Only a .ply file is accepted, got: {file.filename}")
+
     scan_id = str(uuid.uuid4())
     scan_dir = _BASE_DIR / "3d-data" / "uploads" / scan_id
     scan_dir.mkdir(parents=True, exist_ok=True)
 
-    for upload in files:
-        if not (upload.filename or "").lower().endswith(".ply"):
-            raise HTTPException(status_code=400, detail=f"Only .ply files are accepted, got: {upload.filename}")
-        dest = scan_dir / Path(upload.filename).name
-        dest.write_bytes(await upload.read())
-
-    ply_paths = discover_ply_files(scan_dir)
-    if not ply_paths:
-        raise HTTPException(status_code=400, detail="No .ply files found in the uploaded data.")
+    ply_path = scan_dir / Path(file.filename).name
+    ply_path.write_bytes(await file.read())
 
     scan_registry[scan_id] = ScanState(
         scan_id=scan_id,
         scan_dir=scan_dir,
-        ply_paths=ply_paths,
+        ply_path=ply_path,
     )
 
-    return ScanResponse(scan_id=scan_id, frame_count=len(ply_paths))
+    return ScanResponse(scan_id=scan_id, frame_count=1)
 
 
 @app.get("/scans/{scan_id}/projection")
@@ -204,7 +200,7 @@ async def get_holds(scan_id: str):
     holds: list[Hold] = []
     for record in records:
         cx, cy = record.mask_centroid
-        pos_3d = pixel_to_3d(cx, cy, state.merged_pcd, state.cam_params)
+        pos_3d = pixel_to_3d(cx, cy, state.pcd, state.cam_params)
 
         if pos_3d is None:
             position = Position3D(x=0.0, y=0.0, z=0.0)
