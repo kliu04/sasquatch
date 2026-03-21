@@ -3,16 +3,16 @@ from __future__ import annotations
 import io
 import uuid
 from contextlib import asynccontextmanager
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
-import numpy as np
+import cv2
 from fastapi import FastAPI, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 
-from api.ply_service import load_point_cloud, pixel_to_3d, render_point_cloud
-from api.schemas import BBox, Hold, HoldsResponse, Position3D, ScanResponse
+from api.route_service import build_routes
+from api.scan_repository import InMemoryScanRepository, ScanRepository
+from api.scan_service import ScanState, draw_debug_overlay, ensure_processed
+from api.schemas import HoldsResponse, Route, RoutesResponse, ScanResponse
 from hold_detector.app import HoldDetectionApp
 from hold_detector.config import (
     AppConfig,
@@ -23,30 +23,14 @@ from hold_detector.config import (
     TapeFilterConfig,
 )
 
-# ---------------------------------------------------------------------------
-# Scan registry
-# ---------------------------------------------------------------------------
-
 _BASE_DIR = Path(__file__).parent.parent  # hold-detector/
 
-
-@dataclass
-class ScanState:
-    scan_id: str
-    scan_dir: Path
-    ply_path: Path
-    pcd: Any | None = None
-    rendered_image: np.ndarray | None = None
-    cam_params: Any | None = None
-
-
-scan_registry: dict[str, ScanState] = {}
-
 # ---------------------------------------------------------------------------
-# App lifecycle — load Detectron model once at startup
+# App state (created once at startup, injected into endpoints)
 # ---------------------------------------------------------------------------
 
 _hold_app: HoldDetectionApp | None = None
+_repo: ScanRepository | None = None
 
 
 def _default_config() -> AppConfig:
@@ -91,8 +75,9 @@ def _default_config() -> AppConfig:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _hold_app
+    global _hold_app, _repo
     _hold_app = HoldDetectionApp(_default_config())
+    _repo = InMemoryScanRepository()
     yield
 
 
@@ -104,20 +89,10 @@ app = FastAPI(lifespan=lifespan)
 
 
 def _get_scan(scan_id: str) -> ScanState:
-    if scan_id not in scan_registry:
+    state = _repo.get(scan_id)
+    if state is None:
         raise HTTPException(status_code=404, detail=f"Scan '{scan_id}' not found.")
-    return scan_registry[scan_id]
-
-
-def _ensure_projection(state: ScanState) -> None:
-    """Load + render the point cloud if not already cached."""
-    if state.rendered_image is not None:
-        return
-    pcd = load_point_cloud(state.ply_path)
-    image_bgr, cam_params = render_point_cloud(pcd)
-    state.pcd = pcd
-    state.rendered_image = image_bgr
-    state.cam_params = cam_params
+    return state
 
 
 # ---------------------------------------------------------------------------
@@ -126,96 +101,93 @@ def _ensure_projection(state: ScanState) -> None:
 
 
 @app.post("/scans", response_model=ScanResponse, status_code=201)
-async def register_scan(file: UploadFile):
-    """Upload a single .ply file to create a new scan resource."""
-    if not (file.filename or "").lower().endswith(".ply"):
-        raise HTTPException(status_code=400, detail=f"Only a .ply file is accepted, got: {file.filename}")
+async def register_scan(ply_file: UploadFile, png_file: UploadFile | None = None):
+    """Upload a .ply file and an optional .png photo to create a new scan resource."""
+    if not (ply_file.filename or "").lower().endswith(".ply"):
+        raise HTTPException(status_code=400, detail=f"ply_file must be a .ply file, got: {ply_file.filename}")
 
     scan_id = str(uuid.uuid4())
     scan_dir = _BASE_DIR / "3d-data" / "uploads" / scan_id
     scan_dir.mkdir(parents=True, exist_ok=True)
 
-    ply_path = scan_dir / Path(file.filename).name
-    ply_path.write_bytes(await file.read())
+    ply_path = scan_dir / Path(ply_file.filename).name
+    ply_path.write_bytes(await ply_file.read())
 
-    scan_registry[scan_id] = ScanState(
-        scan_id=scan_id,
-        scan_dir=scan_dir,
-        ply_path=ply_path,
-    )
+    png_path: Path | None = None
+    if png_file is not None:
+        png_path = scan_dir / Path(png_file.filename).name
+        png_path.write_bytes(await png_file.read())
 
+    state = ScanState(scan_id=scan_id, scan_dir=scan_dir, ply_path=ply_path, png_path=png_path)
+    _repo.create(state)
     return ScanResponse(scan_id=scan_id, frame_count=1)
 
 
 @app.get("/scans/{scan_id}/projection")
 async def get_projection(scan_id: str):
-    """Return a rendered 2D PNG image of the merged point cloud."""
-    import cv2
-
+    """Return a rendered 2D PNG image of the point cloud."""
     state = _get_scan(scan_id)
-    _ensure_projection(state)
+    ensure_processed(state, _hold_app)
 
     ok, buf = cv2.imencode(".png", state.rendered_image)
     if not ok:
-        raise HTTPException(status_code=500, detail="Failed to encode projection image.")
-
-    return StreamingResponse(io.BytesIO(buf.tobytes()), media_type="image/png")
-
-
-@app.get("/scans/{scan_id}/debug/holds")
-async def get_holds_debug(scan_id: str):
-    """Return projection image with detected holds annotated (bbox + ID label)."""
-    import cv2
-
-    state = _get_scan(scan_id)
-    _ensure_projection(state)
-
-    records = _hold_app.detect(scan_id, state.rendered_image)
-
-    canvas = state.rendered_image.copy()
-    for record in records:
-        x1, y1, x2, y2 = (int(v) for v in record.bbox_xyxy)
-        cx, cy = record.mask_centroid
-        cv2.rectangle(canvas, (x1, y1), (x2, y2), (0, 255, 0), 2)
-        label = str(record.instance_id)
-        (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)
-        cv2.rectangle(canvas, (cx - 2, cy - th - 4), (cx + tw + 2, cy + 2), (0, 255, 0), -1)
-        cv2.putText(canvas, label, (cx, cy), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 2)
-
-    ok, buf = cv2.imencode(".png", canvas)
-    if not ok:
-        raise HTTPException(status_code=500, detail="Failed to encode debug image.")
-
+        raise HTTPException(status_code=500, detail="Failed to encode image.")
     return StreamingResponse(io.BytesIO(buf.tobytes()), media_type="image/png")
 
 
 @app.get("/scans/{scan_id}/holds", response_model=HoldsResponse)
 async def get_holds(scan_id: str):
-    """Detect holds in the rendered point cloud projection and return 3D positions."""
+    """Detect holds and return 3D positions with depth."""
     state = _get_scan(scan_id)
-    _ensure_projection(state)
+    ensure_processed(state, _hold_app)
+    return HoldsResponse(scan_id=scan_id, holds=state.holds)
 
-    records = _hold_app.detect(scan_id, state.rendered_image)
 
-    holds: list[Hold] = []
-    for record in records:
-        cx, cy = record.mask_centroid
-        pos_3d = pixel_to_3d(cx, cy, state.pcd, state.cam_params)
+@app.get("/scans/{scan_id}/debug/holds")
+async def get_holds_debug(scan_id: str):
+    """Return the photo annotated with hold bounding boxes, IDs, and depths."""
+    state = _get_scan(scan_id)
+    ensure_processed(state, _hold_app)
 
-        if pos_3d is None:
-            position = Position3D(x=0.0, y=0.0, z=0.0)
-        else:
-            position = Position3D(x=float(pos_3d[0]), y=float(pos_3d[1]), z=float(pos_3d[2]))
+    canvas = draw_debug_overlay(state)
+    ok, buf = cv2.imencode(".png", canvas)
+    if not ok:
+        raise HTTPException(status_code=500, detail="Failed to encode image.")
+    return StreamingResponse(io.BytesIO(buf.tobytes()), media_type="image/png")
 
-        x1, y1, x2, y2 = record.bbox_xyxy
-        holds.append(
-            Hold(
-                id=record.instance_id,
-                position=position,
-                bbox=BBox(x1=x1, y1=y1, x2=x2, y2=y2),
-                confidence=record.score,
-                hold_type=None,
-            )
-        )
 
-    return HoldsResponse(scan_id=scan_id, holds=holds)
+@app.get("/scans/{scan_id}/routes", response_model=RoutesResponse)
+async def get_routes(
+    scan_id: str,
+    difficulty: str = "medium",
+    style: str = "static",
+    wingspan: float = 1.8,
+):
+    """Generate climbing routes from detected holds using real 3D distances.
+
+    Args:
+        difficulty: easy | medium | hard — controls total route budget (metres)
+        style:      static | dynamic — controls move distance range and style preference
+        wingspan:   climber's max reach in metres (default 1.8m)
+    """
+    if difficulty not in ("easy", "medium", "hard"):
+        raise HTTPException(status_code=400, detail="difficulty must be easy, medium, or hard")
+    if style not in ("static", "dynamic"):
+        raise HTTPException(status_code=400, detail="style must be static or dynamic")
+
+    state = _get_scan(scan_id)
+    ensure_processed(state, _hold_app)
+
+    route_ids = build_routes(
+        state.holds,
+        difficulty=difficulty,
+        style=style,
+        wingspan=wingspan,
+    )
+
+    return RoutesResponse(
+        scan_id=scan_id,
+        difficulty=difficulty,
+        style=style,
+        routes=[Route(holds=r) for r in route_ids],
+    )

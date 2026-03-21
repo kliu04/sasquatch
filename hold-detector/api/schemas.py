@@ -26,9 +26,21 @@ class Hold(BaseModel):
     position: Position3D
     bbox: BBox
     confidence: float
+    depth: float = 0.0
     hold_type: str | None = None
 
 
 class HoldsResponse(BaseModel):
     scan_id: str
     holds: list[Hold]
+
+
+class Route(BaseModel):
+    holds: list[int]
+
+
+class RoutesResponse(BaseModel):
+    scan_id: str
+    difficulty: str
+    style: str
+    routes: list[Route]

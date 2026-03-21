@@ -26,15 +26,15 @@ def render_point_cloud(
     # The wall normal = eigenvector with smallest variance (depth axis).
     # The wall "up" = eigenvector with largest variance (height axis).
     points = np.asarray(pcd.points)
-    centroid = points.mean(axis=0)
-    _, eigenvectors = np.linalg.eigh(np.cov((points - centroid).T))
+    wall_centroid = points.mean(axis=0)
+    _, eigenvectors = np.linalg.eigh(np.cov((points - wall_centroid).T))
     # eigh returns eigenvalues ascending: [smallest, mid, largest]
     wall_normal = eigenvectors[:, 0]   # least variance = depth/normal
     wall_up = eigenvectors[:, 2]       # most variance = height
 
     # Ensure the normal points away from the data centroid (camera looks inward)
     # by checking orientation — flip if needed so camera is on the positive side
-    if np.dot(wall_normal, centroid) < 0:
+    if np.dot(wall_normal, wall_centroid) < 0:
         wall_normal = -wall_normal
 
     vis = o3d.visualization.Visualizer()
@@ -61,6 +61,68 @@ def render_point_cloud(
     image_rgb_u8 = (image_rgb * 255).astype(np.uint8)
     image_bgr = image_rgb_u8[:, :, ::-1].copy()
     return image_bgr, cam_params
+
+
+def compute_depth(
+    bbox_xyxy: tuple[float, float, float, float],
+    pcd: o3d.geometry.PointCloud,
+    cam_params: o3d.camera.PinholeCameraParameters,
+    padding: float = 0.5,
+) -> float:
+    """Return the protrusion depth of a hold from the local wall surface (metres).
+
+    Projects all PLY points to image space, collects those inside the hold bbox,
+    fits a plane to them via PCA, and returns the range along the local normal
+    (max - min signed distance). This equals the depth from the wall surface
+    behind the hold to its outermost point.
+
+    padding: fraction of bbox size added around the bbox to capture wall context.
+    """
+    points = np.asarray(pcd.points)
+    if len(points) == 0:
+        return 0.0
+
+    intrinsic = cam_params.intrinsic
+    extrinsic = cam_params.extrinsic
+
+    ones = np.ones((points.shape[0], 1))
+    pts_h = np.hstack([points, ones])
+    pts_cam = (extrinsic @ pts_h.T).T[:, :3]
+
+    front = pts_cam[:, 2] > 0
+    pts_cam = pts_cam[front]
+    pts_world = points[front]
+
+    if len(pts_cam) == 0:
+        return 0.0
+
+    fx = intrinsic.intrinsic_matrix[0, 0]
+    fy = intrinsic.intrinsic_matrix[1, 1]
+    cx = intrinsic.intrinsic_matrix[0, 2]
+    cy = intrinsic.intrinsic_matrix[1, 2]
+
+    px = fx * (pts_cam[:, 0] / pts_cam[:, 2]) + cx
+    py = fy * (pts_cam[:, 1] / pts_cam[:, 2]) + cy
+
+    x1, y1, x2, y2 = bbox_xyxy
+    bw, bh = x2 - x1, y2 - y1
+    rx1 = x1 - padding * bw
+    rx2 = x2 + padding * bw
+    ry1 = y1 - padding * bh
+    ry2 = y2 + padding * bh
+
+    inside = (px >= rx1) & (px <= rx2) & (py >= ry1) & (py <= ry2)
+    region_pts = pts_world[inside]
+
+    if len(region_pts) < 4:
+        return 0.0
+
+    centroid = region_pts.mean(axis=0)
+    _, eigenvectors = np.linalg.eigh(np.cov((region_pts - centroid).T))
+    local_normal = eigenvectors[:, 0]  # smallest variance = surface normal
+
+    signed_dists = (region_pts - centroid) @ local_normal
+    return float(signed_dists.max() - signed_dists.min())
 
 
 def pixel_to_3d(
