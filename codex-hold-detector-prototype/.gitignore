@@ -43,5 +43,7 @@ checkpoints/
 *.pth
 *.onnx
 *.engine
+*.pth
+*.pt
 *.tflite
 *.torchscript
