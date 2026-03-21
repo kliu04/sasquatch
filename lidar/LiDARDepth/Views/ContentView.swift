@@ -12,21 +12,6 @@ struct ContentView: View {
             VStack {
                 Spacer()
 
-                if scanManager.isRecording {
-                    HStack(spacing: 6) {
-                        Circle()
-                            .fill(.red)
-                            .frame(width: 10, height: 10)
-                        Text("Recording...")
-                            .font(.subheadline)
-                            .foregroundColor(.white)
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(.ultraThinMaterial, in: Capsule())
-                    .padding(.bottom, 8)
-                }
-
                 if scanManager.isExporting {
                     ProgressView("Exporting...")
                         .padding(12)
@@ -35,27 +20,23 @@ struct ContentView: View {
                 }
 
                 HStack(spacing: 40) {
-                    // Record / Stop
+                    // Capture
                     Button {
-                        if scanManager.isRecording {
-                            scanManager.stopRecording()
-                        } else {
-                            scanManager.startRecording()
-                        }
+                        scanManager.capture()
                     } label: {
-                        Image(systemName: scanManager.isRecording ? "stop.circle.fill" : "record.circle")
+                        Image(systemName: "camera.circle.fill")
                             .font(.system(size: 64))
-                            .foregroundColor(scanManager.isRecording ? .red : .white)
+                            .foregroundColor(.white)
                     }
 
-                    // Export PLY
+                    // Export PLY + PNG
                     Button {
-                        scanManager.exportPLY()
+                        scanManager.export()
                     } label: {
                         VStack(spacing: 4) {
                             Image(systemName: "square.and.arrow.up")
                                 .font(.system(size: 28))
-                            Text("Export PLY")
+                            Text("Export")
                                 .font(.caption)
                         }
                         .foregroundColor(.white)
@@ -66,14 +47,14 @@ struct ContentView: View {
                 .padding(.bottom, 40)
             }
         }
-        .onChange(of: scanManager.exportedFileURL) { url in
-            if url != nil {
+        .onChange(of: scanManager.exportedFiles) { files in
+            if !files.isEmpty {
                 showShareSheet = true
             }
         }
         .sheet(isPresented: $showShareSheet) {
-            if let url = scanManager.exportedFileURL {
-                ShareSheet(items: [url])
+            if !scanManager.exportedFiles.isEmpty {
+                ShareSheet(items: scanManager.exportedFiles)
             }
         }
     }
