@@ -8,7 +8,7 @@ from typing import Any
 import numpy as np
 
 from hold_detector.config import GeminiConfig
-from hold_detector.constants import ALLOWED_HOLD_TYPES, GEMINI_SYSTEM_PROMPT, SINGLE_GEMINI_SCHEMA
+from hold_detector.constants import GEMINI_SYSTEM_PROMPT, SINGLE_GEMINI_SCHEMA
 from hold_detector.gemini_grid import GeminiGridBuilder
 from hold_detector.models import DetectionRecord
 
@@ -28,25 +28,26 @@ class GeminiClassifier:
     def __init__(self, config: GeminiConfig) -> None:
         self.config = config
 
-    def classify_image(
+    def filter_tape(
         self,
         image_name: str,
         image_bgr: np.ndarray,
         records: list[DetectionRecord],
-        _masks: list[np.ndarray],
+        masks: list[np.ndarray],
         output_dir: Path,
         api_key: str,
-    ) -> list[DetectionRecord]:
+    ) -> tuple[list[DetectionRecord], list[np.ndarray]]:
         crop_dir = output_dir / "crops" / Path(image_name).stem if self.config.save_crops else None
         max_workers = max(1, min(self.config.concurrency, len(records)))
         max_passes = max(1, self.config.max_retries)
         print(
-            f"{image_name}: starting Gemini classification for {len(records)} candidates "
+            f"{image_name}: starting Gemini tape filter for {len(records)} candidates "
             f"with concurrency={max_workers} across up to {max_passes} pass(es)",
             flush=True,
         )
 
-        classified: list[DetectionRecord | None] = [None] * len(records)
+        # Each entry is (record, is_tape) once resolved; None until first attempt
+        results: list[tuple[DetectionRecord, bool] | None] = [None] * len(records)
         pending_indices = list(range(len(records)))
         completed = 0
         final_failures = 0
@@ -77,18 +78,11 @@ class GeminiClassifier:
                 for future in concurrent.futures.as_completed(future_map):
                     result = future.result()
                     if result["status"] == "ok":
-                        classification = result["classification"]
-                        record = result["prepared_record"]
-                        classified[result["index"]] = record.apply_classification(
-                            hold_type=classification["type"],
-                            color=classification.get("color"),
-                            confidence=classification.get("confidence"),
-                            attempts=result["attempts"],
-                        )
+                        results[result["index"]] = (result["prepared_record"], result["is_tape"])
                         completed += 1
                         if completed >= next_progress or completed == len(records):
                             print(
-                                f"{image_name}: classified {completed}/{len(records)} "
+                                f"{image_name}: processed {completed}/{len(records)} "
                                 f"(final_failures={final_failures})",
                                 flush=True,
                             )
@@ -97,10 +91,8 @@ class GeminiClassifier:
                     else:
                         pass_failures += 1
                         next_pending_indices.append(result["index"])
-                        classified[result["index"]] = result["prepared_record"].mark_failed(
-                            result["error"],
-                            result["attempts"],
-                        )
+                        # Keep on failure — don't remove if we couldn't determine
+                        results[result["index"]] = (result["prepared_record"], False)
             pending_indices = next_pending_indices
             if attempt == max_passes:
                 final_failures = len(pending_indices)
@@ -112,11 +104,17 @@ class GeminiClassifier:
 
         if completed < len(records):
             print(
-                f"{image_name}: classified {completed}/{len(records)} "
+                f"{image_name}: processed {completed}/{len(records)} "
                 f"(final_failures={final_failures})",
                 flush=True,
             )
-        return [record for record in classified if record is not None]
+
+        kept_indices = [i for i, entry in enumerate(results) if entry is not None and not entry[1]]
+        removed_count = sum(1 for entry in results if entry is not None and entry[1])
+        print(f"{image_name}: keeping {len(kept_indices)}, removed {removed_count} as tape", flush=True)
+        kept_records = [results[i][0] for i in kept_indices]
+        kept_masks = [masks[i] for i in kept_indices]
+        return kept_records, kept_masks
 
     def _classify_one(
         self,
@@ -157,7 +155,7 @@ class GeminiClassifier:
                 "attempts": attempt,
                 "index": index,
                 "prepared_record": prepared_record,
-                "classification": self._validate_one(payload),
+                "is_tape": self._validate_one(payload),
             }
         except Exception as exc:
             return {
@@ -176,12 +174,10 @@ class GeminiClassifier:
         )
         return client, types
 
-    def _validate_one(self, payload: dict[str, Any]) -> dict[str, Any]:
+    def _validate_one(self, payload: dict[str, Any]) -> bool:
         if not isinstance(payload, dict):
-            raise ValueError("Classification response is not a JSON object.")
-        hold_type = payload.get("type")
-        if hold_type not in ALLOWED_HOLD_TYPES:
-            raise ValueError(f"Unexpected hold type: {hold_type}")
-        return {
-            "type": hold_type,
-        }
+            raise ValueError("Response is not a JSON object.")
+        is_tape = payload.get("is_tape")
+        if not isinstance(is_tape, bool):
+            raise ValueError(f"Unexpected is_tape value: {is_tape!r}")
+        return is_tape
