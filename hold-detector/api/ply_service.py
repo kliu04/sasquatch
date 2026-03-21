@@ -1,0 +1,129 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+import numpy as np
+import open3d as o3d
+
+
+def discover_ply_files(scan_dir: Path) -> list[Path]:
+    """Return all .ply files under scan_dir, sorted numerically by filename."""
+    return sorted(scan_dir.rglob("*.ply"), key=lambda p: p.stem)
+
+
+def merge_point_clouds(
+    ply_paths: list[Path],
+    voxel_size: float = 0.002,
+) -> o3d.geometry.PointCloud:
+    """Load and merge multiple PLY files into a single point cloud.
+
+    ARKit scans already share a world coordinate frame, so frames are concatenated
+    directly (F3D-style) without ICP. A minimal voxel downsample (0.002m) is used
+    only to remove exact duplicate points from heavily overlapping regions while
+    preserving enough density for a solid rendered image.
+    """
+    merged = o3d.geometry.PointCloud()
+    for p in ply_paths:
+        merged += o3d.io.read_point_cloud(str(p))
+    merged = merged.voxel_down_sample(voxel_size)
+    return merged
+
+
+def render_point_cloud(
+    pcd: o3d.geometry.PointCloud,
+    width: int = 1920,
+    height: int = 1440,
+) -> tuple[np.ndarray, o3d.camera.PinholeCameraParameters]:
+    """Render the point cloud to a 2D image using an offscreen Open3D visualizer.
+
+    Returns:
+        image_bgr: numpy array (H, W, 3) in BGR order for OpenCV compatibility
+        cam_params: pinhole camera parameters used for this render (for back-projection)
+    """
+    # Auto-detect wall orientation via PCA.
+    # The wall normal = eigenvector with smallest variance (depth axis).
+    # The wall "up" = eigenvector with largest variance (height axis).
+    points = np.asarray(pcd.points)
+    centroid = points.mean(axis=0)
+    _, eigenvectors = np.linalg.eigh(np.cov((points - centroid).T))
+    # eigh returns eigenvalues ascending: [smallest, mid, largest]
+    wall_normal = eigenvectors[:, 0]   # least variance = depth/normal
+    wall_up = eigenvectors[:, 2]       # most variance = height
+
+    # Ensure the normal points away from the data centroid (camera looks inward)
+    # by checking orientation — flip if needed so camera is on the positive side
+    if np.dot(wall_normal, centroid) < 0:
+        wall_normal = -wall_normal
+
+    vis = o3d.visualization.Visualizer()
+    vis.create_window(width=width, height=height, visible=False)
+    vis.add_geometry(pcd)
+
+    render_opt = vis.get_render_option()
+    render_opt.point_size = 5.0
+
+    ctr = vis.get_view_control()
+    ctr.set_front((-wall_normal).tolist())   # camera looks toward the wall
+    ctr.set_up((-wall_up).tolist())
+    ctr.set_zoom(0.5)
+
+    vis.poll_events()
+    vis.update_renderer()
+
+    cam_params = ctr.convert_to_pinhole_camera_parameters()
+
+    # Capture as RGB float image then convert to uint8 BGR
+    image_rgb = np.asarray(vis.capture_screen_float_buffer(do_render=True))
+    vis.destroy_window()
+
+    image_rgb_u8 = (image_rgb * 255).astype(np.uint8)
+    image_bgr = image_rgb_u8[:, :, ::-1].copy()
+    return image_bgr, cam_params
+
+
+def pixel_to_3d(
+    u: float,
+    v: float,
+    pcd: o3d.geometry.PointCloud,
+    cam_params: o3d.camera.PinholeCameraParameters,
+    search_radius: float = 5.0,
+) -> np.ndarray | None:
+    """Unproject pixel (u, v) back to 3D world coordinates.
+
+    Projects all point cloud points through the camera intrinsics/extrinsics,
+    finds the nearest projected point to (u, v), and returns its 3D world position.
+    Returns None if no point is found within search_radius pixels.
+    """
+    intrinsic = cam_params.intrinsic
+    extrinsic = cam_params.extrinsic  # 4x4 world-to-camera
+
+    points = np.asarray(pcd.points)
+    if len(points) == 0:
+        return None
+
+    ones = np.ones((points.shape[0], 1))
+    pts_h = np.hstack([points, ones])  # (N, 4)
+    pts_cam = (extrinsic @ pts_h.T).T[:, :3]  # (N, 3)
+
+    mask = pts_cam[:, 2] > 0
+    pts_cam = pts_cam[mask]
+    pts_world = points[mask]
+
+    if len(pts_cam) == 0:
+        return None
+
+    fx = intrinsic.intrinsic_matrix[0, 0]
+    fy = intrinsic.intrinsic_matrix[1, 1]
+    cx = intrinsic.intrinsic_matrix[0, 2]
+    cy = intrinsic.intrinsic_matrix[1, 2]
+
+    px = fx * (pts_cam[:, 0] / pts_cam[:, 2]) + cx
+    py = fy * (pts_cam[:, 1] / pts_cam[:, 2]) + cy
+
+    dists = (px - u) ** 2 + (py - v) ** 2
+    idx = int(np.argmin(dists))
+
+    if dists[idx] > search_radius ** 2:
+        return None
+
+    return pts_world[idx]

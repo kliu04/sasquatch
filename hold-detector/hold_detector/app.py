@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import numpy as np
 from pathlib import Path
 
 from hold_detector.config import AppConfig
 from hold_detector.detectron_service import DetectronRunner
 from hold_detector.gemini_service import GeminiClassifier
 from hold_detector.io_utils import collect_images, ensure_dir, read_image, resolve_api_key, write_json
+from hold_detector.models import DetectionRecord
 from hold_detector.postprocess import PostProcessor
 from hold_detector.rendering import OverlayRenderer
 
@@ -17,6 +19,33 @@ class HoldDetectionApp:
         self.postprocess = PostProcessor(config.tape_filter, config.dedupe)
         self.renderer = OverlayRenderer()
         self.gemini = GeminiClassifier(config.gemini) if config.gemini.enabled else None
+
+    def detect(self, image_name: str, image_bgr: np.ndarray) -> list[DetectionRecord]:
+        """Run the full detection pipeline on a single image and return the final records.
+
+        This is the primary method for API use. Pass image_name for logging; image_bgr
+        is a BGR numpy array as returned by cv2.imread / read_image.
+        """
+        instances = self.detectron.predict(image_bgr)
+        processed = self.postprocess.process(instances, image_bgr)
+
+        records = processed.records
+        masks = processed.masks
+
+        if self.gemini:
+            api_key = resolve_api_key(self.config.gemini)
+            if api_key:
+                output_dir = ensure_dir(self.config.output.output_dir.resolve())
+                records, masks = self.gemini.filter_tape(
+                    image_name,
+                    image_bgr,
+                    records,
+                    masks,
+                    output_dir,
+                    api_key,
+                )
+
+        return records
 
     def run(self) -> int:
         image_paths = collect_images(self.config.images)

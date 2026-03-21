@@ -47,3 +47,4 @@ checkpoints/
 *.pt
 *.tflite
 *.torchscript
+/hold-detector/3d-data/
