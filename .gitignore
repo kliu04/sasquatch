@@ -1,1 +1,9 @@
 .venv/
+
+# Xcode / Swift
+build/
+DerivedData/
+xcuserdata/
+*.xcodeproj/xcuserdata/
+*.xcworkspace/xcuserdata/
+.DS_Store
