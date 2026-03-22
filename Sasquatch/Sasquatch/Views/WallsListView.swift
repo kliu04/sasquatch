@@ -43,7 +43,7 @@ struct WallsListView: View {
                     Spacer()
                 } else {
                     ScrollView(showsIndicators: false) {
-                        LazyVStack(spacing: 16) {
+                        VStack(spacing: 16) {
                             ForEach(walls) { wall in
                                 NavigationLink(value: WallDestination.detail(wall.id)) {
                                     WallCard(wall: wall)

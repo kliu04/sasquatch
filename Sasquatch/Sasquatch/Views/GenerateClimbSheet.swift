@@ -7,7 +7,7 @@ struct GenerateClimbSheet: View {
 
     @Environment(APIClient.self) private var api
     @Environment(\.dismiss) private var dismiss
-    @State private var difficultyValue: Double = 0.5
+    @State private var difficultyStep: Double = 1
     @State private var selectedStyle = "static"
     @State private var isGenerating = false
     @State private var errorMessage: String?
@@ -15,9 +15,11 @@ struct GenerateClimbSheet: View {
     private let styles = ["static", "random", "dynamic"]
 
     private var difficulty: String {
-        if difficultyValue < 0.33 { return "easy" }
-        if difficultyValue < 0.66 { return "medium" }
-        return "hard"
+        switch difficultyStep {
+        case 0: return "easy"
+        case 1: return "medium"
+        default: return "hard"
+        }
     }
 
     private var apiStyle: String {
@@ -70,7 +72,7 @@ struct GenerateClimbSheet: View {
                         .resizable()
                         .aspectRatio(contentMode: .fill)
                         .frame(maxWidth: .infinity)
-                        .frame(height: 378)
+                        .frame(height: 180)
                         .clipped()
                 default:
                     wallImagePlaceholder
@@ -98,50 +100,23 @@ struct GenerateClimbSheet: View {
                 .font(.system(size: 40))
                 .foregroundStyle(.white.opacity(0.8))
         }
-        .frame(height: 378)
+        .frame(height: 180)
     }
 
     private var difficultySlider: some View {
         VStack(spacing: 4) {
+            Slider(value: $difficultyStep, in: 0...2, step: 1)
+                .tint(Color.sasquatchAccent)
+
             HStack {
                 Text("Easy")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(Color.sasquatchTextSecondary)
                 Spacer()
-                Text("Difficult")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(Color.sasquatchTextSecondary)
+                Text("Medium")
+                Spacer()
+                Text("Hard")
             }
-
-            // Custom slider track
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    // Background track
-                    Capsule()
-                        .fill(Color.sasquatchBackground)
-                        .frame(height: 8)
-
-                    // Filled track
-                    Capsule()
-                        .fill(Color.sasquatchSent.opacity(0.5))
-                        .frame(width: geo.size.width * difficultyValue, height: 8)
-
-                    // Thumb
-                    Circle()
-                        .fill(.white)
-                        .stroke(Color.sasquatchTextSecondary, lineWidth: 2)
-                        .frame(width: 20, height: 20)
-                        .offset(x: (geo.size.width - 20) * difficultyValue)
-                        .gesture(
-                            DragGesture(minimumDistance: 0)
-                                .onChanged { value in
-                                    let pct = value.location.x / geo.size.width
-                                    difficultyValue = min(max(pct, 0), 1)
-                                }
-                        )
-                }
-            }
-            .frame(height: 20)
+            .font(.system(size: 12, weight: .medium))
+            .foregroundStyle(Color.sasquatchTextSecondary)
         }
         .padding(.horizontal, 10)
     }
