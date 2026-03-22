@@ -46,6 +46,7 @@ class Wall(Base):
     name = Column(String)
     climbs = relationship("Climb")
     wall_img_url = Column(String)
+    wall_ply_url = Column(String)
 
 
 class Climb(Base):
