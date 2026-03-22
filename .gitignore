@@ -17,7 +17,6 @@ htmlcov/
 
 # Virtual environments
 .venv/
-.venv*/
 venv/
 env/
 
@@ -48,3 +47,10 @@ checkpoints/
 *.tflite
 *.torchscript
 /hold-detector/3d-data/
+
+# Xcode / Swift
+build/
+DerivedData/
+xcuserdata/
+*.xcodeproj/xcuserdata/
+*.xcworkspace/xcuserdata/

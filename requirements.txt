@@ -9,3 +9,5 @@ open3d
 numpy
 pydantic
 python-dotenv
+sqlalchemy
+psycopg2
