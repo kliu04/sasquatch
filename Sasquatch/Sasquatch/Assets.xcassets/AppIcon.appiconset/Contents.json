@@ -1,6 +1,7 @@
 {
   "images" : [
     {
+      "filename" : "sasquatch_app_icon_full_res.png",
       "idiom" : "universal",
       "platform" : "ios",
       "size" : "1024x1024"
