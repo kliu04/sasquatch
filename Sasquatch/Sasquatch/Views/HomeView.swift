@@ -30,7 +30,10 @@ struct HomeView: View {
         }
         .background(Color.sasquatchBackground)
         .navigationBarHidden(true)
-        .onAppear { Task { await loadData() } }
+        .task(id: api.authToken) {
+            guard api.authToken != nil else { return }
+            await loadData()
+        }
     }
 
     // MARK: - Subviews
@@ -256,7 +259,7 @@ struct HomeView: View {
             for wall in walls {
                 guard let climbs = try? await api.getSavedClimbs(wallId: wall.id) else { continue }
                 for climb in climbs {
-                    if climb.isSaved, let date = iso.date(from: climb.createdAt) ?? isoBasic.date(from: climb.createdAt) {
+                    if climb.isSaved, let createdAt = climb.createdAt, let date = iso.date(from: createdAt) ?? isoBasic.date(from: createdAt) {
                         events.append(ActivityEvent(
                             date: date,
                             title: "Saved \(climb.displayName) on \"\(wall.name)\"",

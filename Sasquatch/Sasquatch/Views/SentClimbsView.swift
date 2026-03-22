@@ -70,17 +70,10 @@ struct SentClimbsView: View {
         do {
             let walls = try await api.getWalls()
             var results: [(Climb, String)] = []
-            await withTaskGroup(of: (String, [Climb]).self) { group in
-                for wall in walls {
-                    group.addTask {
-                        let climbs = (try? await api.getSavedClimbs(wallId: wall.id)) ?? []
-                        return (wall.name, climbs)
-                    }
-                }
-                for await (wallName, climbs) in group {
-                    for climb in climbs where climb.isSent {
-                        results.append((climb, wallName))
-                    }
+            for wall in walls {
+                guard let climbs = try? await api.getSavedClimbs(wallId: wall.id) else { continue }
+                for climb in climbs where climb.isSent {
+                    results.append((climb, wall.name))
                 }
             }
             sentClimbs = results.map { (climb: $0.0, wallName: $0.1) }

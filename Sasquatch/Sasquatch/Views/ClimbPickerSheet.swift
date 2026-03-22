@@ -9,7 +9,8 @@ struct ClimbPickerSheet: View {
     @Environment(APIClient.self) private var api
     @State private var selectedIndex = 0
     @State private var currentClimbs: [Climb]
-    @State private var isLoading = false
+    @State private var showShareSheet = false
+    @State private var shareItems: [Any] = []
 
     init(climbs: [Climb], wallId: Int, onSave: @escaping () -> Void, onDismiss: @escaping () -> Void) {
         self.climbs = climbs
@@ -43,8 +44,8 @@ struct ClimbPickerSheet: View {
 
             // Tags
             HStack(spacing: 8) {
-                TagPill(text: currentClimb.difficulty.capitalized)
-                TagPill(text: currentClimb.classification.capitalized)
+                TagPill(text: (currentClimb.difficulty ?? "unknown").capitalized)
+                TagPill(text: (currentClimb.classification ?? "unknown").capitalized)
                 Spacer()
             }
 
@@ -61,8 +62,8 @@ struct ClimbPickerSheet: View {
                 ActionButton(icon: "heart", label: "Favorite", isActive: currentClimb.isFavourite) {
                     Task { await toggleFavourite() }
                 }
-                ActionButton(icon: "square.and.arrow.up", label: "Share", isActive: currentClimb.isSent) {
-                    Task { await markSent() }
+                ActionButton(icon: "square.and.arrow.up", label: "Share", isActive: false) {
+                    Task { await shareClimb() }
                 }
             }
 
@@ -81,6 +82,9 @@ struct ClimbPickerSheet: View {
         .background(.white)
         .clipShape(RoundedRectangle(cornerRadius: 24))
         .padding(.horizontal, 24)
+        .sheet(isPresented: $showShareSheet) {
+            ShareSheet(items: shareItems)
+        }
     }
 
     private var imagePlaceholder: some View {
@@ -145,13 +149,19 @@ struct ClimbPickerSheet: View {
         }
     }
 
-    private func markSent() async {
-        do {
-            currentClimbs[selectedIndex] = try await api.markClimbSent(
-                wallId: wallId, climbId: currentClimb.id
-            )
-        } catch {
-            print("Failed to mark sent: \(error)")
+    private func shareClimb() async {
+        var items: [Any] = ["\(currentClimb.displayName) - Sasquatch"]
+        if let urlStr = currentClimb.climbImgUrl, let url = URL(string: urlStr) {
+            do {
+                let (data, _) = try await URLSession.shared.data(from: url)
+                if let image = UIImage(data: data) {
+                    items.insert(image, at: 0)
+                }
+            } catch {
+                print("Failed to download image for sharing: \(error)")
+            }
         }
+        shareItems = items
+        showShareSheet = true
     }
 }

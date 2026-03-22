@@ -65,7 +65,14 @@
       "Bash(PGPASSWORD=dev psql -h 34.11.229.123 -U postgres -d sasquatch -c \"SELECT id, google_id FROM users LIMIT 3;\" 2>&1)",
       "Bash(python3 -c \"import sys,json; print\\(json.dumps\\(json.loads\\(sys.stdin.read\\(\\)\\), indent=2\\)\\)\")",
       "Bash(PGPASSWORD=dev psql -h 34.11.229.123 -U postgres -d sasquatch -c \"SELECT u.id, u.google_id, w.id as wall_id, w.name, w.status, \\(SELECT count\\(*\\) FROM climbs c WHERE c.wall_id = w.id AND c.is_saved = true\\) as saved_climbs FROM users u LEFT JOIN walls w ON w.user_id = u.id ORDER BY u.id, w.id;\" 2>&1)",
-      "Bash(PGPASSWORD=dev psql -h 34.11.229.123 -U postgres -d sasquatch -c \"SELECT c.id, c.wall_id, c.difficulty, c.is_saved, c.is_favourite, c.date_sent FROM climbs c JOIN walls w ON w.id = c.wall_id WHERE w.user_id = 3 ORDER BY c.id DESC LIMIT 10;\" 2>&1)"
+      "Bash(PGPASSWORD=dev psql -h 34.11.229.123 -U postgres -d sasquatch -c \"SELECT c.id, c.wall_id, c.difficulty, c.is_saved, c.is_favourite, c.date_sent FROM climbs c JOIN walls w ON w.id = c.wall_id WHERE w.user_id = 3 ORDER BY c.id DESC LIMIT 10;\" 2>&1)",
+      "Bash(python3 -c \"import sys,json; line=sys.stdin.readline\\(\\); d=json.loads\\(line\\) if line.strip\\(\\) else {}; print\\(d.get\\(''''data'''',{}\\).get\\(''''result'''',''''NOT DONE YET''''\\)[:3000]\\)\")",
+      "Bash(for f:*)",
+      "Bash(do echo:*)",
+      "Read(//private/tmp/claude-501/-Users-wevie-sasquatch/1adff6ba-2c10-40b2-9049-1034bd7a15c6/tasks/**)",
+      "Bash(python3 -c \"import sys,json; line=sys.stdin.readline\\(\\); d=json.loads\\(line\\) if line.strip\\(\\) else {}; print\\(d.get\\(''''data'''',{}\\).get\\(''''result'''',''''NOT DONE YET''''\\)[:4000]\\)\")",
+      "Bash(done)",
+      "Bash(python3 -c \"import sys,json; line=sys.stdin.readline\\(\\); d=json.loads\\(line\\) if line.strip\\(\\) else {}; r=d.get\\(''''data'''',{}\\).get\\(''''result'''',''''NOT DONE YET''''\\); print\\(r[:5000]\\)\")"
     ]
   }
 }

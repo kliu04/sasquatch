@@ -112,8 +112,8 @@ struct ClimbDetailView: View {
     private var tagsRow: some View {
         HStack {
             HStack(spacing: 8) {
-                TagPill(text: currentClimb.difficulty.capitalized)
-                TagPill(text: currentClimb.classification.capitalized)
+                TagPill(text: (currentClimb.difficulty ?? "unknown").capitalized)
+                TagPill(text: (currentClimb.classification ?? "unknown").capitalized)
             }
 
             Spacer()
