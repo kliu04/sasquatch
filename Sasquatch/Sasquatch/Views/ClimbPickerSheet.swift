@@ -26,16 +26,13 @@ struct ClimbPickerSheet: View {
         VStack(spacing: 16) {
             // Climb image
             if let urlStr = currentClimb.climbImgUrl, let url = URL(string: urlStr) {
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .frame(maxWidth: .infinity, maxHeight: 240)
-                    default:
-                        imagePlaceholder
-                    }
+                CachedAsyncImage(url: url) { image in
+                    image
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(maxWidth: .infinity, maxHeight: 240)
+                } placeholder: {
+                    imagePlaceholder
                 }
                 .clipShape(RoundedRectangle(cornerRadius: 8))
             } else {

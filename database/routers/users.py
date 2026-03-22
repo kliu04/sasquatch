@@ -1,7 +1,7 @@
 """User profile endpoints."""
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -36,6 +36,8 @@ def update_me(
 ):
     # Re-query user in this session (auth may use a different session)
     db_user = db.query(User).filter(User.id == user.id).first()
+    if db_user is None:
+        raise HTTPException(404, "User not found")
     if body.username is not None:
         db_user.username = body.username
     if body.wingspan is not None:

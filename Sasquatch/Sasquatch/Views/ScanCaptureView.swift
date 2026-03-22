@@ -205,7 +205,7 @@ struct ScanCaptureView: View {
                     .foregroundStyle(Color(red: 0.25, green: 0.25, blue: 0.25))
             }
         }
-        .disabled(scanManager.isExporting || isUploading || errorMessage != nil)
-        .opacity((scanManager.isExporting || isUploading) ? 0.5 : 1)
+        .disabled(scanManager.hasCaptured || scanManager.isExporting || isUploading || errorMessage != nil)
+        .opacity((scanManager.hasCaptured || scanManager.isExporting || isUploading) ? 0.5 : 1)
     }
 }

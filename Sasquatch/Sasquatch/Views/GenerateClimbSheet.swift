@@ -65,18 +65,15 @@ struct GenerateClimbSheet: View {
     @ViewBuilder
     private var wallImage: some View {
         if let urlStr = wallImageUrl, let url = URL(string: urlStr) {
-            AsyncImage(url: url) { phase in
-                switch phase {
-                case .success(let image):
-                    image
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 180)
-                        .clipped()
-                default:
-                    wallImagePlaceholder
-                }
+            CachedAsyncImage(url: url) { image in
+                image
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 180)
+                    .clipped()
+            } placeholder: {
+                wallImagePlaceholder
             }
             .clipShape(RoundedRectangle(cornerRadius: 8))
         } else {

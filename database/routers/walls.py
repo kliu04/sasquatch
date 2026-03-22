@@ -245,7 +245,10 @@ def get_holds(
         raise HTTPException(409, f"Wall is not ready (status: {wall.status.name})")
 
     import json
-    holds_data = json.loads(wall.holds_json) if wall.holds_json else []
+    try:
+        holds_data = json.loads(wall.holds_json) if wall.holds_json else []
+    except (json.JSONDecodeError, TypeError):
+        raise HTTPException(500, "Corrupted holds data")
     holds = [
         HoldItem(
             id=h["id"],

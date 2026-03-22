@@ -12,13 +12,13 @@ struct ContentView: View {
             if auth.isSignedIn {
                 ZStack(alignment: .bottom) {
                     NavigationStack(path: $navigationPath) {
-                        Group {
-                            switch selectedTab {
-                            case 0:
-                                HomeView(navigationPath: $navigationPath)
-                            default:
-                                WallsListView()
-                            }
+                        ZStack {
+                            HomeView(navigationPath: $navigationPath)
+                                .opacity(selectedTab == 0 ? 1 : 0)
+                                .allowsHitTesting(selectedTab == 0)
+                            WallsListView()
+                                .opacity(selectedTab == 0 ? 0 : 1)
+                                .allowsHitTesting(selectedTab != 0)
                         }
                         .navigationDestination(isPresented: $showScan) {
                             ScanCaptureView(onScanComplete: { wallId in

@@ -68,17 +68,14 @@ struct ClimbDetailView: View {
     @ViewBuilder
     private var routeImage: some View {
         if let urlStr = currentClimb.climbImgUrl, let url = URL(string: urlStr) {
-            AsyncImage(url: url) { phase in
-                switch phase {
-                case .success(let image):
-                    image
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(maxWidth: .infinity)
-                        .clipped()
-                default:
-                    routeImagePlaceholder
-                }
+            CachedAsyncImage(url: url) { image in
+                image
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(maxWidth: .infinity)
+                    .clipped()
+            } placeholder: {
+                routeImagePlaceholder
             }
             .clipShape(RoundedRectangle(cornerRadius: 16))
         } else {

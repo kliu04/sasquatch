@@ -62,26 +62,20 @@ struct ReviewScanView: View {
         ZStack(alignment: .bottom) {
             // Show holds overlay image when ready, else wall image
             if let holdsUrl = wall?.holdsImageUrl, let url = URL(string: holdsUrl) {
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image.resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .frame(maxWidth: .infinity, maxHeight: 400)
-                    default:
-                        imagePlaceholder
-                    }
+                CachedAsyncImage(url: url) { image in
+                    image.resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(maxWidth: .infinity, maxHeight: 400)
+                } placeholder: {
+                    imagePlaceholder
                 }
             } else if let imgUrl = wall?.wallImgUrl, let url = URL(string: imgUrl) {
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image.resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .frame(maxWidth: .infinity, maxHeight: 400)
-                    default:
-                        imagePlaceholder
-                    }
+                CachedAsyncImage(url: url) { image in
+                    image.resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(maxWidth: .infinity, maxHeight: 400)
+                } placeholder: {
+                    imagePlaceholder
                 }
             } else {
                 imagePlaceholder

@@ -117,20 +117,15 @@ struct WallDetailView: View {
     @ViewBuilder
     private var wallImageSection: some View {
         if let imageUrl = wall?.wallImgUrl, let url = URL(string: imageUrl) {
-            AsyncImage(url: url) { phase in
-                switch phase {
-                case .success(let image):
-                    image
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 240)
-                        .clipped()
-                case .failure:
-                    imagePlaceholder(icon: "photo")
-                default:
-                    imagePlaceholder(icon: nil)
-                }
+            CachedAsyncImage(url: url) { image in
+                image
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 240)
+                    .clipped()
+            } placeholder: {
+                imagePlaceholder(icon: nil)
             }
             .clipShape(RoundedRectangle(cornerRadius: 8))
         } else if wall != nil {
