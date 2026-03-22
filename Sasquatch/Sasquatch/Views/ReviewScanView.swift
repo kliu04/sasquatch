@@ -248,7 +248,7 @@ struct ReviewScanView: View {
             while true {
                 let w = try await api.getWall(wallId, poll: true, timeout: 30)
                 wall = w
-                wallName = w.name
+                wallName = w.name  
                 if w.status == .ready || w.status == .error {
                     break
                 }
@@ -267,6 +267,11 @@ struct ReviewScanView: View {
     }
 
     private func navigateToWall() async {
+        let trimmed = wallName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty {
+            _ = try? await api.updateWall(wallId, name: trimmed)
+        }
+
         if let onDone {
             onDone(wallId)
         } else {
