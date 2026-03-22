@@ -10,7 +10,8 @@
       "Bash(python3 -c \":*)",
       "Bash(SCAN_ID=\"1d246465-3663-4655-98ab-723a8b84c8b5\" curl -sv --max-time 30 \"http://localhost:8001/scans/$SCAN_ID/debug/routes?difficulty=easy&style=dynamic&top_k=3\" -o /dev/null)",
       "Bash(SCAN_ID=\"1d246465-3663-4655-98ab-723a8b84c8b5\")",
-      "Read(//tmp/**)"
+      "Read(//tmp/**)",
+      "Bash(python:*)"
     ]
   }
 }

@@ -32,6 +32,7 @@ class ScanState:
     rendered_image: np.ndarray | None = None
     photo: np.ndarray | None = None
     records: list[DetectionRecord] | None = None
+    masks: list[np.ndarray] | None = None
     holds: list[Hold] | None = None
 
 
@@ -83,10 +84,11 @@ def process_scan(state: ScanState, hold_app: HoldDetectionApp) -> None:
     try:
         t0 = time.perf_counter()
         print(f"[scan {state.scan_id}] starting hold detection...", flush=True)
-        records = hold_app.detect(state.scan_id, state.photo)
+        records, masks = hold_app.detect(state.scan_id, state.photo)
         t1 = time.perf_counter()
         print(f"[scan {state.scan_id}] detection done in {t1 - t0:.1f}s — {len(records)} holds", flush=True)
         state.records = records
+        state.masks = masks
 
         print(f"[scan {state.scan_id}] computing 3D positions for {len(records)} holds...", flush=True)
         holds: list[Hold] = []
@@ -151,6 +153,16 @@ _ROUTE_COLORS = [
     (255, 80, 0),    # blue
     (0, 255, 255),   # yellow
     (255, 0, 255),   # magenta
+    (255, 255, 0),   # cyan
+    (0, 165, 255),   # orange
+    (128, 0, 128),   # purple
+    (0, 128, 255),   # dark orange
+    (180, 105, 255), # hot pink
+    (0, 200, 200),   # dark yellow
+    (255, 0, 128),   # blue-violet
+    (50, 205, 50),   # lime green
+    (0, 69, 255),    # red-orange
+    (203, 192, 255), # pink
 ]
 
 
@@ -158,36 +170,79 @@ def draw_routes_overlay(
     state: ScanState,
     routes: list[list[int]],
 ) -> np.ndarray:
-    """Draw routes as colored polylines over the photo with hold circles."""
+    """Draw routes by coloring hold masks (filled shapes) on the photo."""
     canvas = state.photo.copy()
+
+    # Build mapping from hold ID to mask index
+    # records and masks are parallel arrays; hold.id == record.instance_id
+    mask_by_id: dict[int, np.ndarray] = {}
+    if state.masks is not None and state.records is not None:
+        for record, mask in zip(state.records, state.masks):
+            mask_by_id[record.instance_id] = mask
+
     hold_map = {h.id: h for h in state.holds}
 
-    # Draw all holds as white circles
-    for hold in state.holds:
-        cx = int((hold.bbox.x1 + hold.bbox.x2) / 2)
-        cy = int((hold.bbox.y1 + hold.bbox.y2) / 2)
-        cv2.circle(canvas, (cx, cy), 8, (255, 255, 255), 2)
+    # Draw non-route holds as faint white outlines
+    route_hold_ids: set[int] = set()
+    for route in routes:
+        route_hold_ids.update(route)
 
-    # Draw each route as a colored polyline
+    for hold in state.holds:
+        if hold.id in route_hold_ids:
+            continue
+        if hold.id in mask_by_id:
+            contours, _ = cv2.findContours(
+                mask_by_id[hold.id].astype(np.uint8) * 255,
+                cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE,
+            )
+            cv2.drawContours(canvas, contours, -1, (255, 255, 255), 1)
+        else:
+            cx = int((hold.bbox.x1 + hold.bbox.x2) / 2)
+            cy = int((hold.bbox.y1 + hold.bbox.y2) / 2)
+            cv2.circle(canvas, (cx, cy), 6, (255, 255, 255), 1)
+
+    # Color route holds with their route color (semi-transparent fill + outline)
+    overlay = canvas.copy()
     for ri, route in enumerate(routes):
         color = _ROUTE_COLORS[ri % len(_ROUTE_COLORS)]
-        points = []
+        for hid in route:
+            if hid not in mask_by_id:
+                # Fallback: draw colored circle from bbox
+                hold = hold_map.get(hid)
+                if hold:
+                    cx = int((hold.bbox.x1 + hold.bbox.x2) / 2)
+                    cy = int((hold.bbox.y1 + hold.bbox.y2) / 2)
+                    r = max(int((hold.bbox.x2 - hold.bbox.x1) / 2), 8)
+                    cv2.circle(overlay, (cx, cy), r, color, -1)
+                continue
+            mask = mask_by_id[hid]
+            # Fill mask area with route color
+            overlay[mask] = color
+            # Draw contour outline
+            contours, _ = cv2.findContours(
+                mask.astype(np.uint8) * 255,
+                cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE,
+            )
+            cv2.drawContours(overlay, contours, -1, (0, 0, 0), 2)
+
+    # Blend overlay with original (60% opacity for colored holds)
+    alpha = 0.6
+    canvas = cv2.addWeighted(overlay, alpha, canvas, 1 - alpha, 0)
+
+    # Add route number labels on each hold
+    for ri, route in enumerate(routes):
+        color = _ROUTE_COLORS[ri % len(_ROUTE_COLORS)]
         for hid in route:
             hold = hold_map.get(hid)
             if hold is None:
                 continue
             cx = int((hold.bbox.x1 + hold.bbox.x2) / 2)
             cy = int((hold.bbox.y1 + hold.bbox.y2) / 2)
-            points.append((cx, cy))
-
-        # Draw lines
-        for i in range(len(points) - 1):
-            cv2.line(canvas, points[i], points[i + 1], color, 3, cv2.LINE_AA)
-
-        # Draw filled circles on route holds
-        for pt in points:
-            cv2.circle(canvas, pt, 10, color, -1)
-            cv2.circle(canvas, pt, 10, (0, 0, 0), 2)
+            label = str(ri + 1)
+            cv2.putText(canvas, label, (cx - 5, cy + 5),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 2, cv2.LINE_AA)
+            cv2.putText(canvas, label, (cx - 5, cy + 5),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.4, color, 1, cv2.LINE_AA)
 
     # Legend
     lx, ly = 10, 20

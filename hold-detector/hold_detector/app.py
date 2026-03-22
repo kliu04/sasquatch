@@ -20,11 +20,10 @@ class HoldDetectionApp:
         self.renderer = OverlayRenderer()
         self.gemini = GeminiClassifier(config.gemini) if config.gemini.enabled else None
 
-    def detect(self, image_name: str, image_bgr: np.ndarray) -> list[DetectionRecord]:
-        """Run the full detection pipeline on a single image and return the final records.
+    def detect(self, image_name: str, image_bgr: np.ndarray) -> tuple[list[DetectionRecord], list[np.ndarray]]:
+        """Run the full detection pipeline on a single image.
 
-        This is the primary method for API use. Pass image_name for logging; image_bgr
-        is a BGR numpy array as returned by cv2.imread / read_image.
+        Returns (records, masks) where masks are boolean numpy arrays per hold.
         """
         import time
 
@@ -61,7 +60,7 @@ class HoldDetectionApp:
 
         total = time.perf_counter() - t0
         print(f"[detect] {image_name}: total detect pipeline {total:.1f}s", flush=True)
-        return records
+        return records, masks
 
     def run(self) -> int:
         image_paths = collect_images(self.config.images)
