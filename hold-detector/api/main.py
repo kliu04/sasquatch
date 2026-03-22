@@ -116,7 +116,7 @@ class Scan:
             difficulty=difficulty,
             style=style,
             wingspan=wingspan,
-            gemini_k=top_k,
+            final_k=top_k,
         )
 
     def debug_holds_image(self) -> np.ndarray:

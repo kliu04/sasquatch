@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import random
 from dataclasses import dataclass, field
 
 from api.schemas import Hold
@@ -10,9 +11,9 @@ from api.schemas import Hold
 # ---------------------------------------------------------------------------
 
 DIFFICULTY_BUDGETS: dict[str, float] = {
-    "easy":   8.0,
-    "medium": 5.0,
-    "hard":   3.0,
+    "easy":   10.0,
+    "medium": 6.0,
+    "hard":   4.0,
 }
 
 STYLE_PARAMS: dict[str, dict] = {
@@ -33,7 +34,8 @@ class _Node:
     x3d: float
     y3d: float
     z3d: float
-    # Pixel y — used for top/bottom zone classification
+    # Pixel position — used for zone classification and visualization
+    px_x: float
     px_y: float
     depth: float
     area: int
@@ -72,15 +74,24 @@ def _dist3d(a: _Node, b: _Node) -> float:
 def _assign_difficulty(nodes: list[_Node]) -> None:
     """Normalise difficulty [0, 1] across all nodes in-place.
 
-    Difficulty = inverse of (depth × area):
-      - flush holds (small depth) → harder
-      - small holds (small area) → harder
+    Combines two independently-normalised signals:
+      - depth (60%): flush holds (small depth) → harder
+      - area  (40%): small holds (small area) → harder
+    Depth is weighted more because it better reflects how grabbable a hold is.
     """
-    raw = [1.0 / ((n.depth + _EPSILON) * (n.area + _EPSILON)) for n in nodes]
-    lo, hi = min(raw), max(raw)
-    span = hi - lo if hi > lo else 1.0
-    for node, r in zip(nodes, raw):
-        node.difficulty = (r - lo) / span
+    depth_scores = [1.0 / (n.depth + _EPSILON) for n in nodes]
+    area_scores = [1.0 / (n.area + _EPSILON) for n in nodes]
+
+    def _norm(vals: list[float]) -> list[float]:
+        lo, hi = min(vals), max(vals)
+        span = hi - lo if hi > lo else 1.0
+        return [(v - lo) / span for v in vals]
+
+    d_norm = _norm(depth_scores)
+    a_norm = _norm(area_scores)
+
+    for node, d, a in zip(nodes, d_norm, a_norm):
+        node.difficulty = 0.6 * d + 0.4 * a
 
 
 def _edge_cost(a: _Node, b: _Node, dist: float, alpha: float) -> float:
@@ -122,10 +133,14 @@ def _score_route(
     return coverage * 0.3 + style_fit * 0.4 + diff_fit * 0.3
 
 
-def _dedupe_routes(routes: list[list[int]], max_overlap: float = 0.70) -> list[list[int]]:
-    """Remove routes that share >max_overlap fraction of holds with a higher-scored route."""
+def _dedupe_routes(routes: list[list[int]], max_overlap: float = 0.60, max_per_start: int = 3) -> list[list[int]]:
+    """Remove routes that share >max_overlap holds. Limit routes per starting hold."""
     kept: list[list[int]] = []
+    used_starts: dict[int, int] = {}  # start_id -> count
     for route in routes:
+        start_id = route[0]
+        if used_starts.get(start_id, 0) >= max_per_start:
+            continue
         route_set = set(route)
         duplicate = False
         for existing in kept:
@@ -136,6 +151,7 @@ def _dedupe_routes(routes: list[list[int]], max_overlap: float = 0.70) -> list[l
                 break
         if not duplicate:
             kept.append(route)
+            used_starts[start_id] = used_starts.get(start_id, 0) + 1
     return kept
 
 
@@ -153,6 +169,7 @@ def _build_graph(holds: list[Hold], alpha: float) -> _Graph:
             x3d=hold.position.x,
             y3d=hold.position.y,
             z3d=hold.position.z,
+            px_x=px_cx,
             px_y=px_cy,
             depth=hold.depth,
             area=int((hold.bbox.x2 - hold.bbox.x1) * (hold.bbox.y2 - hold.bbox.y1)),
@@ -190,22 +207,32 @@ def _search_routes(
     budget: float,
     style: str,
     top_k: int,
-    zone_fraction: float = 0.15,
+    zone_fraction: float = 0.20,
 ) -> list[list[int]]:
     """Budget-constrained DFS from bottom holds to top holds.
 
     Uses pixel y for zone classification (image top = low y = wall top).
-    Allows upward, lateral, and small downward moves.
+    Bottom/top zones are defined as fractions of the full image extent
+    (max bbox y across all holds), not just the hold y-range.
     """
     ys = [n.px_y for n in graph.nodes.values()]
     y_min, y_max = min(ys), max(ys)
-    y_range = y_max - y_min
+    y_range = y_max  # use full image extent (y=0 is image top)
 
     zone_thresh = y_range * zone_fraction
     bottom_ids = {nid for nid, n in graph.nodes.items() if n.px_y >= y_max - zone_thresh}
     top_ids    = {nid for nid, n in graph.nodes.items() if n.px_y <= y_min + zone_thresh}
 
+    # Filter starting holds: must be at least 50% of median area (no tiny crimps)
+    all_areas = sorted(n.area for n in graph.nodes.values())
+    median_area = all_areas[len(all_areas) // 2]
+    min_start_area = median_area * 0.5
+    pre_filter = len(bottom_ids)
+    bottom_ids = {nid for nid in bottom_ids if graph.nodes[nid].area >= min_start_area}
+    print(f"[routes] filtered {pre_filter - len(bottom_ids)} small holds from bottom zone (min_area={min_start_area:.0f}px²)", flush=True)
+
     max_downward_px = y_range * STYLE_PARAMS[style]["max_downward_frac"]
+    print(f"[routes] zones: bottom={len(bottom_ids)} holds (y>={y_max - zone_thresh:.0f}), top={len(top_ids)} holds (y<={y_min + zone_thresh:.0f})", flush=True)
 
     # Cap total DFS iterations to avoid combinatorial explosion on dense graphs.
     MAX_ITERATIONS = 100_000
@@ -256,8 +283,8 @@ def build_routes(
     difficulty: str = "medium",
     style: str = "static",
     wingspan: float = 1.8,
-    top_k: int = 20,
-    gemini_k: int = 3,
+    top_k: int = 50,
+    final_k: int = 3,
 ) -> list[list[int]]:
     """Build climbing routes from a list of detected holds.
 
@@ -267,7 +294,7 @@ def build_routes(
         style:      "static" | "dynamic" — sets move distance range and alpha
         wingspan:   max reachable distance in metres (caps sparsify mx)
         top_k:      max DFS candidates before Gemini filter
-        gemini_k:   final routes returned
+        final_k:   final routes returned
     """
     if difficulty not in DIFFICULTY_BUDGETS:
         raise ValueError(f"difficulty must be one of {list(DIFFICULTY_BUDGETS)}")
@@ -299,4 +326,79 @@ def build_routes(
     ranked = [r for _, r in scored]
     diverse = _dedupe_routes(ranked)
     print(f"[routes] after scoring+dedup: {len(diverse)} diverse routes", flush=True)
-    return diverse[:gemini_k]
+
+    final = diverse[:final_k]
+
+    # Add footholds along each route (post-hoc, doesn't affect pathfinding)
+    final = _add_footholds(final, g, wingspan=mx)
+
+    return final
+
+
+def _add_footholds(
+    routes: list[list[int]],
+    graph: _Graph,
+    wingspan: float,
+) -> list[list[int]]:
+    """Add footholds along each route.
+
+    For each handhold, find nearby holds below it (within wingspan radius
+    in 3D) and randomly insert 1-2 as footholds. Also prepend 1-2 starting
+    footholds below the first handhold. This runs after route generation
+    so it doesn't affect cost/budget.
+    """
+    # Foot reach radius: roughly half wingspan (you reach down with your foot)
+    foot_radius_3d = wingspan * 0.6
+
+    result: list[list[int]] = []
+    for route in routes:
+        if len(route) < 2:
+            result.append(route)
+            continue
+
+        route_set = set(route)
+        enriched: list[int] = []
+
+        for idx, hid in enumerate(route):
+            hand = graph.nodes[hid]
+
+            # Find candidate footholds: below or near this handhold
+            candidates: list[tuple[float, int]] = []
+            for nid, node in graph.nodes.items():
+                if nid in route_set:
+                    continue
+                if nid in {fid for fid in enriched if fid not in route_set}:
+                    continue  # already used as foothold
+                # Must be below or at same height (higher pixel y = lower on wall)
+                if node.px_y < hand.px_y:
+                    continue
+                # Within 3D reach
+                dist = _dist3d(hand, node)
+                if dist > foot_radius_3d:
+                    continue
+                candidates.append((dist, nid))
+
+            # Pick footholds for this handhold
+            if candidates:
+                candidates.sort(key=lambda x: x[0])
+                pool = candidates[:5]
+                # First handhold: always 1-2 footholds (starting stance)
+                # Other handholds: usually 1 foothold, sometimes 2
+                if idx == 0:
+                    n_feet = random.choice([1, 2])
+                else:
+                    n_feet = random.choice([1, 1, 1, 2])
+                n_feet = min(n_feet, len(pool))
+                if n_feet > 0:
+                    chosen = random.sample(pool, n_feet)
+                    foot_ids = [fid for _, fid in chosen]
+                    enriched.extend(foot_ids)
+
+            enriched.append(hid)
+
+        added = len(enriched) - len(route)
+        if added > 0:
+            print(f"[routes] added {added} foothold(s) to route ({len(route)} → {len(enriched)} holds)", flush=True)
+        result.append(enriched)
+
+    return result
