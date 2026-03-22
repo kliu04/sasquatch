@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -s http://localhost:8000/docs)",
+      "Bash(curl:*)",
+      "Bash(SCAN_ID=\"02280ad5-b16d-4268-b3f3-ab77f0b48b69\" echo \"=== easy/static ===\" curl -s --max-time 30 \"http://localhost:8001/scans/$SCAN_ID/routes?difficulty=easy&style=static\")",
+      "Bash(python3 -m json.tool echo \"\" echo \"=== easy/dynamic ===\" curl -s --max-time 30 \"http://localhost:8001/scans/$SCAN_ID/routes?difficulty=easy&style=dynamic\")",
+      "Bash(python3 -m json.tool)",
+      "Bash(SCAN_ID=\"1d246465-3663-4655-98ab-723a8b84c8b5\" echo \"=== medium/static ===\" curl -s --max-time 30 \"http://localhost:8001/scans/$SCAN_ID/routes?difficulty=medium&style=static\")",
+      "Bash(python3 -c \":*)",
+      "Bash(SCAN_ID=\"1d246465-3663-4655-98ab-723a8b84c8b5\" curl -sv --max-time 30 \"http://localhost:8001/scans/$SCAN_ID/debug/routes?difficulty=easy&style=dynamic&top_k=3\" -o /dev/null)",
+      "Bash(SCAN_ID=\"1d246465-3663-4655-98ab-723a8b84c8b5\")",
+      "Read(//tmp/**)"
+    ]
+  }
+}

@@ -1,7 +1,13 @@
 torch
 torchvision
-opencv-python
+opencv-python-headless
 PyYAML
 google-genai
+fastapi
+uvicorn[standard]
+open3d
+numpy
+pydantic
+python-dotenv
 sqlalchemy
 psycopg2

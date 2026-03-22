@@ -1,0 +1,11 @@
+.venv*
+__pycache__
+*.pyc
+.env
+hold-detector/.env
+hold-detector/3d-data/uploads/
+hold-detector/detectron-output/
+hold-detector/archive/model/triplet_network_final.pt
+hold-detector/archive/model/test_results.json
+.git
+.claude
