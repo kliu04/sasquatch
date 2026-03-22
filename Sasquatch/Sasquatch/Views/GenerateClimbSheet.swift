@@ -109,16 +109,19 @@ struct GenerateClimbSheet: View {
     @ViewBuilder
     private var wallImage: some View {
         if let urlStr = displayImageUrl, let url = URL(string: urlStr) {
-            CachedAsyncImage(url: url) { image in
-                image
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(maxWidth: .infinity)
-            } placeholder: {
-                wallImagePlaceholder
+            GeometryReader { geo in
+                CachedAsyncImage(url: url) { image in
+                    image
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: geo.size.width, height: geo.size.height)
+                } placeholder: {
+                    wallImagePlaceholder
+                }
             }
+            .frame(height: 220)
             .clipShape(RoundedRectangle(cornerRadius: 8))
-            .id(urlStr) // Force reload when URL changes
+            .id(urlStr)
         } else {
             wallImagePlaceholder
                 .clipShape(RoundedRectangle(cornerRadius: 8))
@@ -140,7 +143,7 @@ struct GenerateClimbSheet: View {
                 .font(.system(size: 40))
                 .foregroundStyle(.white.opacity(0.8))
         }
-        .frame(height: 378)
+        .frame(height: 220)
     }
 
     private var difficultySlider: some View {
