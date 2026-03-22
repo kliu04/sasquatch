@@ -32,7 +32,7 @@ struct WallCreateResponse: Codable {
     let id: Int
     let name: String
     let status: String
-    let plyUploadUrl: String
+    let plyUploadUrl: String?
     let pngUploadUrl: String
     let createdAt: String
 }

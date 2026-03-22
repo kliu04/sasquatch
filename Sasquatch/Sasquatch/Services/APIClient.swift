@@ -54,8 +54,8 @@ class APIClient {
         return try decoder.decode(Wall.self, from: data)
     }
 
-    func createWall(name: String) async throws -> WallCreateResponse {
-        let body = ["name": name]
+    func createWall(name: String, hasPly: Bool = true) async throws -> WallCreateResponse {
+        let body = CreateWallRequest(name: name, hasPly: hasPly)
         let data = try await request("/walls", method: "POST", body: body)
         return try decoder.decode(WallCreateResponse.self, from: data)
     }
@@ -127,6 +127,11 @@ enum APIError: LocalizedError {
             return "HTTP \(code): \(message)"
         }
     }
+}
+
+private struct CreateWallRequest: Encodable {
+    let name: String
+    let hasPly: Bool
 }
 
 private struct AnyEncodable: Encodable {

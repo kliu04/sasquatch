@@ -133,13 +133,15 @@ struct ScanCaptureView: View {
         do {
             // 1. Create wall
             uploadStatus = "Creating wall..."
-            let response = try await api.createWall(name: "Wall \(Int(Date().timeIntervalSince1970) % 10000)")
+            let hasPly = files.contains(where: { $0.pathExtension == "ply" })
+            let response = try await api.createWall(name: "Wall \(Int(Date().timeIntervalSince1970) % 10000)", hasPly: hasPly)
 
             // 2. Upload PLY
-            if let plyURL = files.first(where: { $0.pathExtension == "ply" }) {
+            if let plyURL = files.first(where: { $0.pathExtension == "ply" }),
+               let plyUploadUrl = response.plyUploadUrl {
                 uploadStatus = "Uploading point cloud..."
                 let plyData = try Data(contentsOf: plyURL)
-                try await api.uploadFile(to: response.plyUploadUrl, data: plyData, contentType: "application/octet-stream")
+                try await api.uploadFile(to: plyUploadUrl, data: plyData, contentType: "application/octet-stream")
             }
 
             // 3. Upload PNG
