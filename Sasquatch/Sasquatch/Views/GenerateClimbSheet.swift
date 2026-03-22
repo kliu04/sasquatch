@@ -13,6 +13,9 @@ struct GenerateClimbSheet: View {
     @State private var isGenerating = false
     @State private var errorMessage: String?
     @State private var generatedClimbs: [Climb] = []
+    @State private var selectedIndex = 0
+    @State private var lastGeneratedDifficulty: Double = -1
+    @State private var lastGeneratedStyle: String = ""
 
     private let styles = ["static", "random", "dynamic"]
 
@@ -88,20 +91,32 @@ struct GenerateClimbSheet: View {
 
     // MARK: - Subviews
 
+    private var selectedClimb: Climb? {
+        guard !generatedClimbs.isEmpty, selectedIndex < generatedClimbs.count else { return nil }
+        return generatedClimbs[selectedIndex]
+    }
+
+    // Show selected climb image if available, otherwise wall image
+    private var displayImageUrl: String? {
+        if let climbUrl = selectedClimb?.climbImgUrl {
+            return climbUrl
+        }
+        return wallImageUrl
+    }
+
     @ViewBuilder
     private var wallImage: some View {
-        if let urlStr = wallImageUrl, let url = URL(string: urlStr) {
+        if let urlStr = displayImageUrl, let url = URL(string: urlStr) {
             CachedAsyncImage(url: url) { image in
                 image
                     .resizable()
-                    .aspectRatio(contentMode: .fill)
+                    .aspectRatio(contentMode: .fit)
                     .frame(maxWidth: .infinity)
-                    .frame(height: 378)
-                    .clipped()
             } placeholder: {
                 wallImagePlaceholder
             }
             .clipShape(RoundedRectangle(cornerRadius: 8))
+            .id(urlStr) // Force reload when URL changes
         } else {
             wallImagePlaceholder
                 .clipShape(RoundedRectangle(cornerRadius: 8))
@@ -231,41 +246,58 @@ struct GenerateClimbSheet: View {
     }
 
     private var postGenerationButtons: some View {
-        HStack(spacing: 12) {
-            // Try again button
-            Button {
-                generatedClimbs = []
-                Task { await generate() }
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "arrow.counterclockwise")
-                        .font(.system(size: 18))
-                    Text("Try again")
-                        .font(.sasquatchBody(16))
-                }
-                .foregroundStyle(Color.sasquatchText)
-                .frame(width: 151, height: 44)
-                .background(.white)
-                .clipShape(Capsule())
-                .overlay(
-                    Capsule().stroke(Color.sasquatchAccent, lineWidth: 2)
-                )
+        VStack(spacing: 12) {
+            // Route indicator
+            if generatedClimbs.count > 1 {
+                Text("Route \(selectedIndex + 1) of \(generatedClimbs.count)")
+                    .font(.sasquatchMedium(14))
+                    .foregroundStyle(Color.sasquatchText.opacity(0.6))
             }
 
-            // Let's go! button
-            Button {
-                onGenerated(generatedClimbs)
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 20, weight: .semibold))
-                    Text("Let's go!")
-                        .font(.sasquatchButton(16))
+            HStack(spacing: 12) {
+                // Try again — re-generate if settings changed, otherwise cycle
+                Button {
+                    if difficultyStep != lastGeneratedDifficulty || selectedStyle != lastGeneratedStyle {
+                        generatedClimbs = []
+                        Task { await generate() }
+                    } else {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            selectedIndex = (selectedIndex + 1) % generatedClimbs.count
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "arrow.counterclockwise")
+                            .font(.system(size: 18))
+                        Text("Try again")
+                            .font(.sasquatchBody(16))
+                    }
+                    .foregroundStyle(Color.sasquatchText)
+                    .frame(width: 151, height: 44)
+                    .background(.white)
+                    .clipShape(Capsule())
+                    .overlay(
+                        Capsule().stroke(Color.sasquatchAccent, lineWidth: 2)
+                    )
                 }
-                .foregroundStyle(.white)
-                .frame(width: 151, height: 44)
-                .background(Color.sasquatchSent)
-                .clipShape(Capsule())
+
+                // Let's go! — accept selected climb
+                Button {
+                    if let climb = selectedClimb {
+                        onGenerated([climb])
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 20, weight: .semibold))
+                        Text("Let's go!")
+                            .font(.sasquatchButton(16))
+                    }
+                    .foregroundStyle(.white)
+                    .frame(width: 151, height: 44)
+                    .background(Color.sasquatchSent)
+                    .clipShape(Capsule())
+                }
             }
         }
     }
@@ -279,12 +311,16 @@ struct GenerateClimbSheet: View {
             let climbs = try await api.generateClimbs(
                 wallId: wallId,
                 difficulty: difficulty,
-                style: apiStyle
+                style: apiStyle,
+                topK: 20
             )
             if climbs.isEmpty {
                 errorMessage = "No routes found for this difficulty. Try a different setting."
             } else {
                 generatedClimbs = climbs
+                selectedIndex = 0
+                lastGeneratedDifficulty = difficultyStep
+                lastGeneratedStyle = selectedStyle
             }
         } catch {
             errorMessage = "Generation failed: \(error.localizedDescription)"

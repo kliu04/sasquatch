@@ -77,7 +77,19 @@
       "mcp__xcode__XcodeListWindows",
       "mcp__xcode__XcodeRead",
       "mcp__xcode__XcodeWrite",
-      "mcp__xcode__BuildProject"
+      "mcp__xcode__BuildProject",
+      "mcp__plugin_figma_figma__get_screenshot",
+      "Bash(python3 -c \"from PIL import Image; print\\(''PIL available''\\)\")",
+      "Bash(cp /tmp/avatar_crop.png sasquatch_avatar.imageset/image.png)",
+      "Bash(cp /tmp/sent_crop.png sasquatch_sent.imageset/image.png)",
+      "Bash(cp /tmp/camera_crop.png sasquatch_camera.imageset/image.png)",
+      "Bash(PYTHONPATH=.:hold-detector .venv/bin/python -c \"\nfrom database.db import engine\nfrom sqlalchemy import text\nwith engine.begin\\(\\) as conn:\n    conn.execute\\(text\\(\\\\\"UPDATE walls SET status='pending_upload' WHERE id=40\\\\\"\\)\\)\nprint\\('Wall 40 reset to pending_upload'\\)\n\")",
+      "Bash(fc-scan --format \"%{postscriptname}\\\\n\" RethinkSans-VariableFont.ttf)",
+      "Bash(PYTHONPATH=.:hold-detector .venv/bin/python -c \"\nfrom database.db import engine\nfrom sqlalchemy import text\nwith engine.begin\\(\\) as conn:\n    conn.execute\\(text\\(\\\\\"UPDATE walls SET status='pending_upload' WHERE id=40\\\\\"\\)\\)\nprint\\('Reset'\\)\n\")",
+      "Bash(open:*)",
+      "Bash(grep:*)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(d[0][''''climb_img_url'''']\\)\")",
+      "Bash(curl -s -X POST -H \"Authorization: Bearer dev\" -H \"Content-Type: application/json\" -d '{\"\"\"\"difficulty\"\"\"\": \"\"\"\"hard\"\"\"\", \"\"\"\"style\"\"\"\": \"\"\"\"dynamic\"\"\"\"}' http://localhost:8000/walls/45/climbs)"
     ]
   }
 }

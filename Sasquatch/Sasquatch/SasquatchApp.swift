@@ -15,6 +15,14 @@ let apiBaseURL = "http://100.114.110.17:8000"
 struct SasquatchApp: App {
     init() {
         GIDSignIn.sharedInstance.configuration = GIDConfiguration(clientID: googleClientID)
+
+        // Debug: print available custom font names
+        for family in UIFont.familyNames.sorted() {
+            let names = UIFont.fontNames(forFamilyName: family)
+            if family.contains("Bowlby") || family.contains("Rethink") {
+                print("Font family: \(family) -> \(names)")
+            }
+        }
     }
 
     var body: some Scene {

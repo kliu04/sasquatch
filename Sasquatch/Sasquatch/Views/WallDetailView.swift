@@ -24,47 +24,45 @@ struct WallDetailView: View {
     }
 
     var body: some View {
-        ZStack(alignment: .top) {
-            Color.sasquatchBackground
-                .ignoresSafeArea()
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 0) {
+                // Blue header band with back button and wall name
+                ZStack(alignment: .bottomLeading) {
+                    Color.sasquatchBlue
+                        .frame(height: 160)
 
-            // Blue header band
-            Color.sasquatchBlue
-                .frame(height: 160)
-                .ignoresSafeArea(edges: .top)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Button { dismiss() } label: {
+                            Image(systemName: "arrow.left")
+                                .font(.system(size: 20, weight: .medium))
+                                .foregroundStyle(Color.sasquatchText)
+                                .frame(width: 44, height: 44)
+                                .contentShape(Rectangle())
+                        }
 
-            // Scrollable content
-            ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 24) {
-                    // Back button
-                    Button { dismiss() } label: {
-                        Image(systemName: "arrow.left")
-                            .font(.system(size: 20, weight: .medium))
+                        Text(wall?.name.uppercased() ?? "")
+                            .font(.sasquatchTitle(30))
                             .foregroundStyle(Color.sasquatchText)
-                            .frame(width: 44, height: 44)
-                            .contentShape(Rectangle())
                     }
-                    .padding(.top, 4)
-                    .padding(.bottom, -16)
+                    .padding(.horizontal, 30)
+                    .padding(.bottom, 16)
+                }
 
-                    // Wall name
-                    Text(wall?.name.uppercased() ?? "")
-                        .font(.sasquatchTitle(30))
-                        .foregroundStyle(Color.sasquatchText)
+                // Content below header
+                VStack(alignment: .leading, spacing: 24) {
+                    wallImageSection
 
-                    // Wall image
-                    wallImageSection.padding(.top, 20)
-
-                    // Generate new climb button
                     generateButton
 
-                    // Saved climbs section
                     savedClimbsSection
                 }
                 .padding(.horizontal, 30)
+                .padding(.top, 24)
                 .padding(.bottom, 40)
             }
         }
+        .background(Color.sasquatchBackground)
+        .ignoresSafeArea(edges: .top)
         .navigationBarHidden(true)
         .task { await loadData() }
         .overlay {
@@ -136,10 +134,8 @@ struct WallDetailView: View {
             CachedAsyncImage(url: url) { image in
                 image
                     .resizable()
-                    .aspectRatio(contentMode: .fill)
+                    .aspectRatio(contentMode: .fit)
                     .frame(maxWidth: .infinity)
-                    .frame(height: 331)
-                    .clipped()
             } placeholder: {
                 imagePlaceholder(icon: nil)
             }

@@ -101,6 +101,25 @@ struct ScanCaptureView: View {
                     .padding(.bottom, 32)
             }
             .padding(.horizontal, 24)
+
+            // Back button
+            VStack {
+                HStack {
+                    Button { dismiss() } label: {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 18, weight: .medium))
+                            .foregroundStyle(Color.sasquatchText)
+                            .frame(width: 40, height: 40)
+                            .background(.white)
+                            .clipShape(Circle())
+                            .overlay(Circle().stroke(Color.sasquatchText.opacity(0.3), lineWidth: 1))
+                    }
+                    Spacer()
+                }
+                .padding(.horizontal, 24)
+                .padding(.top, 16)
+                Spacer()
+            }
         }
         .navigationBarHidden(true)
         .onAppear { scanManager.checkLiDAR() }
@@ -187,10 +206,21 @@ struct ScanCaptureView: View {
 
     private var captureButton: some View {
         Button {
+            #if targetEnvironment(simulator)
+            // In the simulator, create a mock PNG from the bundled wall image and trigger upload directly
+            if let uiImage = UIImage(named: "mock_wall"),
+               let pngData = uiImage.pngData() {
+                let docsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+                let mockPng = docsDir.appendingPathComponent("mock_scan_\(Int(Date().timeIntervalSince1970)).png")
+                try? pngData.write(to: mockPng)
+                Task { await uploadAndProcess(files: [mockPng]) }
+            }
+            #else
             scanManager.capture()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                 scanManager.export()
             }
+            #endif
         } label: {
             ZStack {
                 Circle().fill(.white).frame(width: 80, height: 80)

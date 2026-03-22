@@ -98,16 +98,17 @@ struct WallCard: View {
         VStack(alignment: .leading, spacing: 12) {
             // Wall image thumbnail
             if let urlStr = wall.wallImgUrl, let url = URL(string: urlStr) {
-                CachedAsyncImage(url: url) { image in
-                    image
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 93)
-                        .clipped()
-                } placeholder: {
-                    thumbnailPlaceholder
+                GeometryReader { geo in
+                    CachedAsyncImage(url: url) { image in
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(width: geo.size.width, height: geo.size.height)
+                    } placeholder: {
+                        thumbnailPlaceholder
+                    }
                 }
+                .frame(height: 180)
                 .clipShape(RoundedRectangle(cornerRadius: 16))
             } else {
                 thumbnailPlaceholder
@@ -126,9 +127,7 @@ struct WallCard: View {
                 statusTag
             }
         }
-        .padding(.leading, 17)
-        .padding(.trailing, 1)
-        .padding(.vertical, 17)
+        .padding(16)
         .background(.white)
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .overlay(
