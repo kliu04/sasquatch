@@ -15,6 +15,7 @@ struct WallDetailView: View {
     @State private var showClimbPicker = false
     @State private var showShareSheet = false
     @State private var shareItems: [Any] = []
+    @State private var isGeneratingClimb = false
 
     init(wallId: Int, previewWall: Wall? = nil, previewClimbs: [Climb]? = nil) {
         self.wallId = wallId
@@ -28,7 +29,7 @@ struct WallDetailView: View {
                 .ignoresSafeArea()
 
             // Blue header band
-            Color.sasquatchAccent
+            Color.sasquatchBlue
                 .frame(height: 160)
                 .ignoresSafeArea(edges: .top)
 
@@ -48,7 +49,7 @@ struct WallDetailView: View {
 
                     // Wall name
                     Text(wall?.name.uppercased() ?? "")
-                        .font(.sasquatchTitle())
+                        .font(.sasquatchTitle(30))
                         .foregroundStyle(Color.sasquatchText)
 
                     // Wall image
@@ -74,16 +75,18 @@ struct WallDetailView: View {
 
                 GenerateClimbSheet(
                     wallId: wallId,
-                    wallImageUrl: wall?.wallImgUrl
-                ) { newClimbs in
-                    if newClimbs.isEmpty {
-                        // Route generation found no valid routes — stay on generate sheet
-                        return
-                    }
-                    generatedClimbs = newClimbs
-                    showGenerateSheet = false
-                    showClimbPicker = true
-                }
+                    wallImageUrl: wall?.wallImgUrl,
+                    onGenerated: { newClimbs in
+                        if newClimbs.isEmpty {
+                            // Route generation found no valid routes — stay on generate sheet
+                            return
+                        }
+                        generatedClimbs = newClimbs
+                        showGenerateSheet = false
+                        showClimbPicker = true
+                    },
+                    onDismiss: { showGenerateSheet = false }
+                )
                 .environment(api)
                 .transition(.opacity.combined(with: .scale(scale: 0.95)))
             }
@@ -117,6 +120,12 @@ struct WallDetailView: View {
         }
         .animation(.easeInOut(duration: 0.25), value: showClimbPicker)
         .background(SharePresenter(isPresented: $showShareSheet, items: shareItems))
+        .overlay {
+            if isGeneratingClimb {
+                climbGenerationLoadingScreen
+            }
+        }
+        .animation(.easeInOut(duration: 0.25), value: isGeneratingClimb)
     }
 
     // MARK: - Subviews
@@ -129,7 +138,7 @@ struct WallDetailView: View {
                     .resizable()
                     .aspectRatio(contentMode: .fill)
                     .frame(maxWidth: .infinity)
-                    .frame(height: 240)
+                    .frame(height: 331)
                     .clipped()
             } placeholder: {
                 imagePlaceholder(icon: nil)
@@ -155,7 +164,7 @@ struct WallDetailView: View {
                 }
                 .foregroundStyle(.white.opacity(0.9))
             }
-            .frame(height: 240)
+            .frame(height: 331)
             .clipShape(RoundedRectangle(cornerRadius: 8))
         } else if isLoading {
             imagePlaceholder(icon: nil)
@@ -166,7 +175,7 @@ struct WallDetailView: View {
     private func imagePlaceholder(icon: String?) -> some View {
         RoundedRectangle(cornerRadius: 8)
             .fill(Color.gray.opacity(0.1))
-            .frame(height: 240)
+            .frame(height: 331)
             .overlay {
                 if let icon {
                     Image(systemName: icon)
@@ -192,16 +201,15 @@ struct WallDetailView: View {
             .background(.white)
             .clipShape(Capsule())
             .overlay(
-                Capsule().stroke(Color.sasquatchAccent, lineWidth: 2)
+                Capsule().stroke(Color.sasquatchBlue, lineWidth: 2)
             )
         }
     }
 
-
     private var savedClimbsSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Saved climbs")
-                .font(.sasquatchHeading())
+                .font(.sasquatchHeading(20))
                 .foregroundStyle(Color.sasquatchTextSecondary)
 
             if climbs.isEmpty && !isLoading {
@@ -219,9 +227,30 @@ struct WallDetailView: View {
                             .environment(api)
                     } label: {
                         ClimbCard(climb: climb)
+                            .frame(height: 73)
+                            .clipShape(RoundedRectangle(cornerRadius: 16))
                     }
                     .buttonStyle(.plain)
                 }
+            }
+        }
+    }
+
+    private var climbGenerationLoadingScreen: some View {
+        ZStack {
+            Color.sasquatchBlue
+                .ignoresSafeArea()
+
+            VStack(spacing: 16) {
+                Image("sasquatch_searching")
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 211)
+
+                Text("Generating climb...")
+                    .font(.sasquatchTitle(20))
+                    .foregroundStyle(Color.sasquatchText)
+                    .tracking(-0.6)
             }
         }
     }

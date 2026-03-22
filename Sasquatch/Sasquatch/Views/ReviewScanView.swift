@@ -15,6 +15,42 @@ struct ReviewScanView: View {
     @State private var isRenaming = false
 
     var body: some View {
+        Group {
+            if isProcessing {
+                analyzingView
+            } else {
+                reviewContent
+            }
+        }
+        .animation(.easeInOut, value: isProcessing)
+        .navigationBarHidden(true)
+        .task { await pollForProcessing() }
+    }
+
+    // MARK: - Full Screen Analyzing View
+
+    private var analyzingView: some View {
+        ZStack {
+            Color.sasquatchBlue
+                .ignoresSafeArea()
+
+            VStack(spacing: 16) {
+                Image("sasquatch_analyzing")
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 200)
+
+                Text("Analyzing image ...")
+                    .font(.sasquatchTitle(20))
+                    .foregroundStyle(Color.sasquatchText)
+                    .tracking(-0.6)
+            }
+        }
+    }
+
+    // MARK: - Review Content
+
+    private var reviewContent: some View {
         ZStack(alignment: .top) {
             Color.sasquatchBackground
                 .ignoresSafeArea()
@@ -52,8 +88,6 @@ struct ReviewScanView: View {
                 .padding(.bottom, 40)
             }
         }
-        .navigationBarHidden(true)
-        .task { await pollForProcessing() }
     }
 
     // MARK: - Image Card

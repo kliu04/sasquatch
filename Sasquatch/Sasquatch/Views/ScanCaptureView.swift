@@ -13,13 +13,25 @@ struct ScanCaptureView: View {
 
     var body: some View {
         ZStack {
-            Color(red: 0.25, green: 0.25, blue: 0.25)
+            Color.sasquatchBackground
                 .ignoresSafeArea()
 
-            VStack(spacing: 32) {
+            VStack(spacing: 0) {
+                // Sasquatch mascot — overlaps top of camera view
+                Image("sasquatch_camera")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 100, height: 100)
+                    .zIndex(1)
+                    .offset(y: 24)
+
                 // Camera viewfinder
                 ZStack {
                     ARViewContainer(scanManager: scanManager)
+                        .clipShape(RoundedRectangle(cornerRadius: 16))
+
+                    // Semi-transparent dark overlay
+                    Color.sasquatchText.opacity(0.5)
                         .clipShape(RoundedRectangle(cornerRadius: 16))
 
                     gridOverlay
@@ -28,14 +40,14 @@ struct ScanCaptureView: View {
                     if !scanManager.hasCaptured && !isUploading {
                         VStack(spacing: 8) {
                             Text("Frame the climbing wall")
-                                .font(.system(size: 18, weight: .semibold))
+                                .font(.sasquatchBody(18))
                                 .foregroundStyle(.white)
                             Text("Make sure the entire wall is visible")
-                                .font(.system(size: 14))
+                                .font(.sasquatchRegular(14))
                                 .foregroundStyle(.white.opacity(0.7))
                             if !scanManager.hasLiDAR {
                                 Text("Camera only — no LiDAR depth")
-                                    .font(.system(size: 12, weight: .medium))
+                                    .font(.sasquatchMedium(12))
                                     .foregroundStyle(.orange.opacity(0.9))
                                     .padding(.top, 4)
                             }
@@ -51,7 +63,7 @@ struct ScanCaptureView: View {
                                 .tint(.white)
                                 .scaleEffect(1.5)
                             Text(scanManager.isExporting ? "Processing scan..." : uploadStatus)
-                                .font(.system(size: 14, weight: .semibold))
+                                .font(.sasquatchBody(14))
                                 .foregroundStyle(.white)
                         }
                     }
@@ -63,14 +75,14 @@ struct ScanCaptureView: View {
                                 .font(.system(size: 32))
                                 .foregroundStyle(.orange)
                             Text(errorMessage)
-                                .font(.system(size: 14, weight: .medium))
+                                .font(.sasquatchMedium(14))
                                 .foregroundStyle(.white)
                                 .multilineTextAlignment(.center)
                             Button("Try again") {
                                 self.errorMessage = nil
                                 scanManager.hasCaptured = false
                             }
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(.sasquatchBody(14))
                             .foregroundStyle(.white)
                             .padding(.horizontal, 20)
                             .padding(.vertical, 8)
@@ -80,30 +92,15 @@ struct ScanCaptureView: View {
                         .padding(24)
                     }
                 }
-                .frame(height: 472)
+                .frame(height: 584)
+
+                Spacer()
 
                 // Capture button
                 captureButton
+                    .padding(.bottom, 32)
             }
             .padding(.horizontal, 24)
-
-            // Back button
-            VStack {
-                HStack {
-                    Button { dismiss() } label: {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 18, weight: .medium))
-                            .foregroundStyle(.white)
-                            .frame(width: 40, height: 40)
-                            .background(.white.opacity(0.2))
-                            .clipShape(Circle())
-                    }
-                    Spacer()
-                }
-                .padding(.horizontal, 24)
-                .padding(.top, 16)
-                Spacer()
-            }
         }
         .navigationBarHidden(true)
         .onAppear { scanManager.checkLiDAR() }
@@ -197,12 +194,12 @@ struct ScanCaptureView: View {
         } label: {
             ZStack {
                 Circle().fill(.white).frame(width: 80, height: 80)
-                    .overlay(Circle().stroke(Color(red: 0.44, green: 0.75, blue: 0.98), lineWidth: 3))
+                    .overlay(Circle().stroke(Color.sasquatchAccent, lineWidth: 3))
                 Circle().fill(.white).frame(width: 64, height: 64)
-                    .overlay(Circle().stroke(Color(red: 0.25, green: 0.25, blue: 0.25), lineWidth: 1))
+                    .overlay(Circle().stroke(Color.sasquatchText.opacity(0.5), lineWidth: 1))
                 Image(systemName: "camera.fill")
-                    .font(.system(size: 24))
-                    .foregroundStyle(Color(red: 0.25, green: 0.25, blue: 0.25))
+                    .font(.system(size: 28))
+                    .foregroundStyle(Color.sasquatchText)
             }
         }
         .disabled(scanManager.hasCaptured || scanManager.isExporting || isUploading || errorMessage != nil)

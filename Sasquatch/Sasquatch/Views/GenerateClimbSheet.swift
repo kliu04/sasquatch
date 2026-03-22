@@ -4,6 +4,7 @@ struct GenerateClimbSheet: View {
     let wallId: Int
     let wallImageUrl: String?
     var onGenerated: ([Climb]) -> Void
+    var onDismiss: (() -> Void)?
 
     @Environment(APIClient.self) private var api
     @Environment(\.dismiss) private var dismiss
@@ -11,6 +12,7 @@ struct GenerateClimbSheet: View {
     @State private var selectedStyle = "static"
     @State private var isGenerating = false
     @State private var errorMessage: String?
+    @State private var generatedClimbs: [Climb] = []
 
     private let styles = ["static", "random", "dynamic"]
 
@@ -31,13 +33,32 @@ struct GenerateClimbSheet: View {
 
     var body: some View {
         VStack(spacing: 16) {
+            // Close button
+            HStack {
+                Spacer()
+                Button {
+                    if let onDismiss {
+                        onDismiss()
+                    } else {
+                        dismiss()
+                    }
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Color.sasquatchText)
+                        .frame(width: 32, height: 32)
+                        .contentShape(Rectangle())
+                }
+            }
+
             // Wall image
             wallImage
 
             // Preferences heading
             Text("Preferences")
-                .font(.system(size: 18, weight: .heavy))
-                .foregroundStyle(Color.sasquatchTextSecondary)
+                .font(.sasquatchHeading(18))
+                .foregroundStyle(Color.sasquatchText)
+                .frame(maxWidth: .infinity, alignment: .center)
 
             // Difficulty slider
             difficultySlider
@@ -51,10 +72,15 @@ struct GenerateClimbSheet: View {
                     .foregroundStyle(.red)
             }
 
-            // Generate button
-            generateButton
+            // Generate / post-generation buttons
+            if generatedClimbs.isEmpty {
+                generateButton
+            } else {
+                postGenerationButtons
+            }
         }
-        .padding(16)
+        .padding(.horizontal, 24)
+        .padding(.vertical, 36)
         .background(.white)
         .clipShape(RoundedRectangle(cornerRadius: 24))
         .padding(.horizontal, 24)
@@ -70,7 +96,7 @@ struct GenerateClimbSheet: View {
                     .resizable()
                     .aspectRatio(contentMode: .fill)
                     .frame(maxWidth: .infinity)
-                    .frame(height: 180)
+                    .frame(height: 378)
                     .clipped()
             } placeholder: {
                 wallImagePlaceholder
@@ -97,23 +123,58 @@ struct GenerateClimbSheet: View {
                 .font(.system(size: 40))
                 .foregroundStyle(.white.opacity(0.8))
         }
-        .frame(height: 180)
+        .frame(height: 378)
     }
 
     private var difficultySlider: some View {
         VStack(spacing: 4) {
-            Slider(value: $difficultyStep, in: 0...2, step: 1)
-                .tint(Color.sasquatchAccent)
+            // Custom slider track + thumb
+            GeometryReader { geo in
+                let trackHeight: CGFloat = 6
+                let thumbSize: CGFloat = 20
+                let usableWidth = geo.size.width - thumbSize
+                let thumbX = thumbSize / 2 + usableWidth * (difficultyStep / 2)
+
+                ZStack(alignment: .leading) {
+                    // Track
+                    Capsule()
+                        .fill(Color.sasquatchSent.opacity(0.5))
+                        .frame(height: trackHeight)
+                        .frame(maxWidth: .infinity)
+                        .padding(.horizontal, thumbSize / 2)
+
+                    // Thumb
+                    Circle()
+                        .fill(.white)
+                        .overlay(
+                            Circle()
+                                .stroke(Color.sasquatchText, lineWidth: 2)
+                        )
+                        .frame(width: thumbSize, height: thumbSize)
+                        .position(x: thumbX, y: geo.size.height / 2)
+                        .gesture(
+                            DragGesture(minimumDistance: 0)
+                                .onChanged { value in
+                                    let fraction = (value.location.x - thumbSize / 2) / usableWidth
+                                    let clamped = min(max(fraction, 0), 1)
+                                    let stepped = (clamped * 2).rounded()
+                                    withAnimation(.easeInOut(duration: 0.1)) {
+                                        difficultyStep = stepped
+                                    }
+                                }
+                        )
+                }
+            }
+            .frame(height: 28)
 
             HStack {
                 Text("Easy")
                 Spacer()
-                Text("Medium")
-                Spacer()
-                Text("Hard")
+                Text("Difficult")
             }
-            .font(.system(size: 12, weight: .medium))
-            .foregroundStyle(Color.sasquatchTextSecondary)
+            .font(.sasquatchBody(12))
+            .fontWeight(.semibold)
+            .foregroundStyle(Color.sasquatchText)
         }
         .padding(.horizontal, 10)
     }
@@ -127,10 +188,11 @@ struct GenerateClimbSheet: View {
                     }
                 } label: {
                     Text(style.capitalized)
-                        .font(.system(size: 13, weight: selectedStyle == style ? .bold : .medium))
-                        .foregroundStyle(Color.sasquatchTextSecondary)
+                        .font(selectedStyle == style ? .sasquatchButton(13) : .sasquatchBody(13))
+                        .fontWeight(selectedStyle == style ? .bold : .semibold)
+                        .foregroundStyle(Color.sasquatchText)
                         .frame(maxWidth: .infinity)
-                        .frame(height: 28)
+                        .frame(height: 32)
                         .background(
                             selectedStyle == style
                                 ? AnyShapeStyle(.white)
@@ -149,20 +211,16 @@ struct GenerateClimbSheet: View {
         Button {
             Task { await generate() }
         } label: {
-            HStack(spacing: 10) {
+            HStack(spacing: 8) {
                 if isGenerating {
                     ProgressView()
-                        .tint(Color.sasquatchTextSecondary)
-                } else {
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 20))
+                        .tint(Color.sasquatchText)
                 }
                 Text(isGenerating ? "Generating..." : "Generate")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.sasquatchButton(16))
             }
-            .foregroundStyle(Color.sasquatchTextSecondary)
-            .padding(.horizontal, 40)
-            .padding(.vertical, 13)
+            .foregroundStyle(Color.sasquatchText)
+            .frame(width: 151, height: 44)
             .background(.white)
             .clipShape(Capsule())
             .overlay(
@@ -170,6 +228,46 @@ struct GenerateClimbSheet: View {
             )
         }
         .disabled(isGenerating)
+    }
+
+    private var postGenerationButtons: some View {
+        HStack(spacing: 12) {
+            // Try again button
+            Button {
+                generatedClimbs = []
+                Task { await generate() }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "arrow.counterclockwise")
+                        .font(.system(size: 18))
+                    Text("Try again")
+                        .font(.sasquatchBody(16))
+                }
+                .foregroundStyle(Color.sasquatchText)
+                .frame(width: 151, height: 44)
+                .background(.white)
+                .clipShape(Capsule())
+                .overlay(
+                    Capsule().stroke(Color.sasquatchAccent, lineWidth: 2)
+                )
+            }
+
+            // Let's go! button
+            Button {
+                onGenerated(generatedClimbs)
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 20, weight: .semibold))
+                    Text("Let's go!")
+                        .font(.sasquatchButton(16))
+                }
+                .foregroundStyle(.white)
+                .frame(width: 151, height: 44)
+                .background(Color.sasquatchSent)
+                .clipShape(Capsule())
+            }
+        }
     }
 
     // MARK: - Action
@@ -186,7 +284,7 @@ struct GenerateClimbSheet: View {
             if climbs.isEmpty {
                 errorMessage = "No routes found for this difficulty. Try a different setting."
             } else {
-                onGenerated(climbs)
+                generatedClimbs = climbs
             }
         } catch {
             errorMessage = "Generation failed: \(error.localizedDescription)"
@@ -201,7 +299,8 @@ struct GenerateClimbSheet: View {
         GenerateClimbSheet(
             wallId: 1,
             wallImageUrl: nil,
-            onGenerated: { _ in }
+            onGenerated: { _ in },
+            onDismiss: { }
         )
         .environment(APIClient())
     }

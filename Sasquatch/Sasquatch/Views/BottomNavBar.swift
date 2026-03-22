@@ -7,35 +7,32 @@ struct BottomNavBar: View {
 
     var body: some View {
         HStack {
-            Spacer()
-
             // Home
             Button { selectedTab = 0; onTabTapped?() } label: {
                 Image(systemName: "house.fill")
                     .font(.system(size: 20))
-                    .foregroundStyle(Color.sasquatchTextSecondary)
+                    .foregroundStyle(selectedTab == 0 ? .white : Color.sasquatchText)
                     .frame(width: 48, height: 48)
-                    .background(.white)
+                    .background(selectedTab == 0 ? Color.sasquatchText : .clear)
                     .clipShape(Circle())
                     .overlay(
-                        Circle().stroke(Color.sasquatchTextSecondary, lineWidth: 2)
+                        Circle().stroke(Color.sasquatchText, lineWidth: selectedTab == 0 ? 0 : 1.5)
                     )
             }
 
             Spacer()
 
-            // Scan (center, prominent)
+            // Scan (center)
             Button { onScanTapped() } label: {
                 Image(systemName: "camera.fill")
-                    .font(.system(size: 19))
-                    .foregroundStyle(.white)
-                    .frame(width: 50, height: 50)
-                    .background(Color.sasquatchAccent)
+                    .font(.system(size: 21))
+                    .foregroundStyle(Color.sasquatchText)
+                    .frame(width: 48, height: 48)
+                    .background(.clear)
                     .clipShape(Circle())
                     .overlay(
-                        Circle().stroke(.white, lineWidth: 2.4)
+                        Circle().stroke(Color.sasquatchText, lineWidth: 1.5)
                     )
-                    .shadow(color: .black.opacity(0.2), radius: 5, y: 4)
             }
 
             Spacer()
@@ -44,22 +41,23 @@ struct BottomNavBar: View {
             Button { selectedTab = 2; onTabTapped?() } label: {
                 Image(systemName: "square.grid.2x2")
                     .font(.system(size: 20))
-                    .foregroundStyle(Color.sasquatchTextSecondary)
+                    .foregroundStyle(selectedTab == 2 ? .white : Color.sasquatchText)
                     .frame(width: 48, height: 48)
-                    .background(.white)
+                    .background(selectedTab == 2 ? Color.sasquatchText : .clear)
                     .clipShape(Circle())
                     .overlay(
-                        Circle().stroke(Color.sasquatchTextSecondary, lineWidth: 2)
+                        Circle().stroke(Color.sasquatchText, lineWidth: selectedTab == 2 ? 0 : 1.5)
                     )
             }
-
-            Spacer()
         }
+        .padding(.horizontal, 56)
         .padding(.top, 12)
         .padding(.bottom, 12)
         .background(.white)
         .overlay(alignment: .top) {
-            Divider()
+            Rectangle()
+                .fill(Color.sasquatchText.opacity(0.2))
+                .frame(height: 1)
         }
     }
 }

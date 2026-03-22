@@ -72,7 +72,12 @@
       "Read(//private/tmp/claude-501/-Users-wevie-sasquatch/1adff6ba-2c10-40b2-9049-1034bd7a15c6/tasks/**)",
       "Bash(python3 -c \"import sys,json; line=sys.stdin.readline\\(\\); d=json.loads\\(line\\) if line.strip\\(\\) else {}; print\\(d.get\\(''''data'''',{}\\).get\\(''''result'''',''''NOT DONE YET''''\\)[:4000]\\)\")",
       "Bash(done)",
-      "Bash(python3 -c \"import sys,json; line=sys.stdin.readline\\(\\); d=json.loads\\(line\\) if line.strip\\(\\) else {}; r=d.get\\(''''data'''',{}\\).get\\(''''result'''',''''NOT DONE YET''''\\); print\\(r[:5000]\\)\")"
+      "Bash(python3 -c \"import sys,json; line=sys.stdin.readline\\(\\); d=json.loads\\(line\\) if line.strip\\(\\) else {}; r=d.get\\(''''data'''',{}\\).get\\(''''result'''',''''NOT DONE YET''''\\); print\\(r[:5000]\\)\")",
+      "Bash(tree -L 3 /Users/randyzhu/Desktop/produhacks/sasquatch/Sasquatch/Sasquatch -I *.xcassets)",
+      "mcp__xcode__XcodeListWindows",
+      "mcp__xcode__XcodeRead",
+      "mcp__xcode__XcodeWrite",
+      "mcp__xcode__BuildProject"
     ]
   }
 }
