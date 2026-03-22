@@ -141,6 +141,7 @@ GET /health -> {"status": "ok"}
 GET  /users/me                              -> UserResponse
 PATCH /users/me <- {username?, wingspan?}    -> UserResponse
 ```
+The iOS app converts the user's height (feet/inches) to meters and stores it as `wingspan` (1:1 ratio).
 
 ### Walls
 ```

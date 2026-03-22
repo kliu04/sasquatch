@@ -108,6 +108,21 @@ class APIClient {
         return try decoder.decode(Climb.self, from: data)
     }
 
+    // MARK: - User Profile
+
+    func getMe() async throws -> UserProfile {
+        let data = try await request("/users/me")
+        return try decoder.decode(UserProfile.self, from: data)
+    }
+
+    func updateMe(username: String? = nil, wingspan: Double? = nil) async throws -> UserProfile {
+        var body: [String: AnyEncodable] = [:]
+        if let username { body["username"] = AnyEncodable(username) }
+        if let wingspan { body["wingspan"] = AnyEncodable(wingspan) }
+        let data = try await request("/users/me", method: "PATCH", body: body)
+        return try decoder.decode(UserProfile.self, from: data)
+    }
+
     func deleteClimb(wallId: Int, climbId: Int) async throws {
         _ = try await request("/walls/\(wallId)/climbs/\(climbId)", method: "DELETE")
     }
@@ -145,7 +160,7 @@ private struct CreateWallRequest: Encodable {
     let hasPly: Bool
 }
 
-private struct AnyEncodable: Encodable {
+struct AnyEncodable: Encodable {
     let value: any Encodable
     init(_ value: any Encodable) { self.value = value }
     func encode(to encoder: Encoder) throws {
