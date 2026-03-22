@@ -56,16 +56,29 @@ class GCSStorage:
         )
 
     def upload_bytes(self, data: bytes, path: str, content_type: str = "image/png") -> str:
-        """Upload bytes to GCS. Returns public URL."""
+        """Upload bytes to GCS. Returns the GCS path (not a URL)."""
         blob = self._bucket.blob(path)
         blob.upload_from_string(data, content_type=content_type)
-        return self.public_url(path)
+        return path
 
     def upload_file(self, local_path: Path, gcs_path: str, content_type: str | None = None) -> str:
-        """Upload a local file to GCS. Returns public URL."""
+        """Upload a local file to GCS. Returns the GCS path (not a URL)."""
         blob = self._bucket.blob(gcs_path)
         blob.upload_from_filename(str(local_path), content_type=content_type)
-        return self.public_url(gcs_path)
+        return gcs_path
+
+    def _gcs_path(self, path_or_url: str) -> str:
+        """Strip public URL prefix to get the GCS object path."""
+        prefix = f"https://storage.googleapis.com/{self._bucket_name}/"
+        if path_or_url.startswith(prefix):
+            return path_or_url[len(prefix):]
+        return path_or_url
+
+    def signed_url_or_none(self, path_or_url: str | None, expiry_minutes: int = 60) -> str | None:
+        """Convert a stored path or public URL to a signed read URL. Returns None if input is None."""
+        if not path_or_url:
+            return None
+        return self.generate_read_url(self._gcs_path(path_or_url), expiry_minutes)
 
     def download_to_tempfile(self, path: str, suffix: str = "") -> Path:
         """Download a GCS object to a local temp file. Caller must clean up."""

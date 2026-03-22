@@ -57,7 +57,15 @@
       "Bash(xargs kill:*)",
       "Bash(PYTHONPATH=.:hold-detector .venv/bin/uvicorn database.server:app --host 0.0.0.0 --port 8000)",
       "Bash(source /Users/randyzhu/Desktop/produhacks/sasquatch/.venv/bin/activate)",
-      "Bash(echo \"Virtual environment activated: $VIRTUAL_ENV\")"
+      "Bash(echo \"Virtual environment activated: $VIRTUAL_ENV\")",
+      "Bash(python3 -c \"import sys,json; data=json.load\\(sys.stdin\\); print\\(type\\(data\\)\\); [print\\(json.dumps\\(w, indent=2\\)\\) for w in \\(data if isinstance\\(data, list\\) else [data]\\)]\")",
+      "Bash(PGPASSWORD=dev psql -h 34.11.229.123 -U postgres -d sasquatch -c \"SELECT id, wall_id, difficulty, climb_img_url, is_saved FROM climbs ORDER BY id DESC LIMIT 10;\" 2>&1)",
+      "Bash(PGPASSWORD=dev psql -h 34.11.229.123 -U postgres -d sasquatch -c \"SELECT id, route_hold_ids FROM climbs WHERE route_hold_ids = '[]' OR route_hold_ids IS NULL OR route_hold_ids = 'null' LIMIT 5;\" 2>&1)",
+      "Bash(PGPASSWORD=dev psql -h 34.11.229.123 -U postgres -d sasquatch -c \"SELECT id, difficulty, classification, route_hold_ids, created_at, is_saved FROM climbs WHERE is_saved = true AND \\(difficulty IS NULL OR classification IS NULL OR route_hold_ids IS NULL OR created_at IS NULL\\) LIMIT 5;\" 2>&1)",
+      "Bash(PGPASSWORD=dev psql -h 34.11.229.123 -U postgres -d sasquatch -c \"SELECT id, google_id FROM users LIMIT 3;\" 2>&1)",
+      "Bash(python3 -c \"import sys,json; print\\(json.dumps\\(json.loads\\(sys.stdin.read\\(\\)\\), indent=2\\)\\)\")",
+      "Bash(PGPASSWORD=dev psql -h 34.11.229.123 -U postgres -d sasquatch -c \"SELECT u.id, u.google_id, w.id as wall_id, w.name, w.status, \\(SELECT count\\(*\\) FROM climbs c WHERE c.wall_id = w.id AND c.is_saved = true\\) as saved_climbs FROM users u LEFT JOIN walls w ON w.user_id = u.id ORDER BY u.id, w.id;\" 2>&1)",
+      "Bash(PGPASSWORD=dev psql -h 34.11.229.123 -U postgres -d sasquatch -c \"SELECT c.id, c.wall_id, c.difficulty, c.is_saved, c.is_favourite, c.date_sent FROM climbs c JOIN walls w ON w.id = c.wall_id WHERE w.user_id = 3 ORDER BY c.id DESC LIMIT 10;\" 2>&1)"
     ]
   }
 }

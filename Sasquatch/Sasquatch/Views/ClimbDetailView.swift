@@ -8,6 +8,7 @@ struct ClimbDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var currentClimb: Climb
     @State private var showShareSheet = false
+    @State private var shareItems: [Any] = []
 
     init(climb: Climb, wallName: String) {
         self.climb = climb
@@ -20,7 +21,6 @@ struct ClimbDetailView: View {
             Color.sasquatchBackground
                 .ignoresSafeArea()
 
-            // Blue header band
             Color.sasquatchAccent
                 .frame(height: 160)
                 .ignoresSafeArea(edges: .top)
@@ -49,12 +49,18 @@ struct ClimbDetailView: View {
 
                     // Action buttons
                     actionButtons
+
+                    // Send button
+                    sendButton
                 }
                 .padding(.horizontal, 24)
                 .padding(.bottom, 40)
             }
         }
         .navigationBarHidden(true)
+        .sheet(isPresented: $showShareSheet) {
+            ShareSheet(items: shareItems)
+        }
     }
 
     // MARK: - Subviews
@@ -67,11 +73,9 @@ struct ClimbDetailView: View {
                 case .success(let image):
                     image
                         .resizable()
-                        .aspectRatio(contentMode: .fill)
+                        .aspectRatio(contentMode: .fit)
                         .frame(maxWidth: .infinity)
-                        .frame(height: 559)
                         .clipped()
-                        .opacity(0.5)
                 default:
                     routeImagePlaceholder
                 }
@@ -102,12 +106,11 @@ struct ClimbDetailView: View {
             }
             .foregroundStyle(.white.opacity(0.8))
         }
-        .frame(height: 559)
+        .frame(height: 300)
     }
 
     private var tagsRow: some View {
         HStack {
-            // Difficulty + style tags
             HStack(spacing: 8) {
                 TagPill(text: currentClimb.difficulty.capitalized)
                 TagPill(text: currentClimb.classification.capitalized)
@@ -115,7 +118,6 @@ struct ClimbDetailView: View {
 
             Spacer()
 
-            // SENT badge
             if currentClimb.isSent {
                 Text("SENT!")
                     .font(.system(size: 12, weight: .heavy))
@@ -138,9 +140,29 @@ struct ClimbDetailView: View {
                 Task { await toggleFavourite() }
             }
             ActionButton(icon: "square.and.arrow.up", label: "Share", isActive: false) {
-                Task { await markSent() }
+                Task { await shareClimbImage() }
             }
         }
+    }
+
+    private var sendButton: some View {
+        Button {
+            Task { await markSent() }
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: currentClimb.isSent ? "checkmark.circle.fill" : "checkmark.circle")
+                    .font(.system(size: 20))
+                Text(currentClimb.isSent ? "Sent!" : "Mark as Sent")
+                    .font(.system(size: 16, weight: .semibold))
+            }
+            .foregroundStyle(.white)
+            .frame(maxWidth: .infinity)
+            .frame(height: 56)
+            .background(Color.sasquatchSent)
+            .clipShape(Capsule())
+        }
+        .disabled(currentClimb.isSent)
+        .opacity(currentClimb.isSent ? 0.7 : 1)
     }
 
     // MARK: - Actions
@@ -179,6 +201,36 @@ struct ClimbDetailView: View {
             print("Failed to mark sent: \(error)")
         }
     }
+
+    private func shareClimbImage() async {
+        var items: [Any] = ["\(currentClimb.displayName) - Sasquatch"]
+
+        if let urlStr = currentClimb.climbImgUrl, let url = URL(string: urlStr) {
+            do {
+                let (data, _) = try await URLSession.shared.data(from: url)
+                if let image = UIImage(data: data) {
+                    items.insert(image, at: 0)
+                }
+            } catch {
+                print("Failed to download image for sharing: \(error)")
+            }
+        }
+
+        shareItems = items
+        showShareSheet = true
+    }
+}
+
+// MARK: - Share Sheet
+
+struct ShareSheet: UIViewControllerRepresentable {
+    let items: [Any]
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: items, applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
 
 // MARK: - Tag Pill

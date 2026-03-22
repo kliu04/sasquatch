@@ -9,8 +9,10 @@ struct WallDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var wall: Wall?
     @State private var climbs: [Climb] = []
+    @State private var generatedClimbs: [Climb] = []
     @State private var isLoading = true
     @State private var showGenerateSheet = false
+    @State private var showClimbPicker = false
 
     init(wallId: Int, previewWall: Wall? = nil, previewClimbs: [Climb]? = nil) {
         self.wallId = wallId
@@ -36,6 +38,8 @@ struct WallDetailView: View {
                         Image(systemName: "arrow.left")
                             .font(.system(size: 20, weight: .medium))
                             .foregroundStyle(Color.sasquatchText)
+                            .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
                     }
                     .padding(.top, 4)
                     .padding(.bottom, -16)
@@ -69,15 +73,43 @@ struct WallDetailView: View {
                 GenerateClimbSheet(
                     wallId: wallId,
                     wallImageUrl: wall?.wallImgUrl
-                ) { _ in
-                    Task { await refreshClimbs() }
+                ) { newClimbs in
+                    if newClimbs.isEmpty {
+                        // Route generation found no valid routes — stay on generate sheet
+                        return
+                    }
+                    generatedClimbs = newClimbs
                     showGenerateSheet = false
+                    showClimbPicker = true
                 }
                 .environment(api)
                 .transition(.opacity.combined(with: .scale(scale: 0.95)))
             }
         }
         .animation(.easeInOut(duration: 0.25), value: showGenerateSheet)
+        .overlay {
+            if showClimbPicker && !generatedClimbs.isEmpty {
+                Color.black.opacity(0.5)
+                    .ignoresSafeArea()
+
+                ClimbPickerSheet(
+                    climbs: generatedClimbs,
+                    wallId: wallId,
+                    onSave: {
+                        showClimbPicker = false
+                        generatedClimbs = []
+                        Task { await refreshClimbs() }
+                    },
+                    onDismiss: {
+                        showClimbPicker = false
+                        generatedClimbs = []
+                    }
+                )
+                .environment(api)
+                .transition(.opacity.combined(with: .scale(scale: 0.95)))
+            }
+        }
+        .animation(.easeInOut(duration: 0.25), value: showClimbPicker)
     }
 
     // MARK: - Subviews
@@ -162,6 +194,7 @@ struct WallDetailView: View {
             )
         }
     }
+
 
     private var savedClimbsSection: some View {
         VStack(alignment: .leading, spacing: 16) {

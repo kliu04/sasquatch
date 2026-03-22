@@ -79,7 +79,7 @@ def _climb_response(climb: Climb) -> ClimbResponse:
         is_saved=climb.is_saved or False,
         is_favourite=climb.is_favourite or False,
         date_sent=climb.date_sent.isoformat() if climb.date_sent else None,
-        climb_img_url=climb.climb_img_url,
+        climb_img_url=_storage.signed_url_or_none(climb.climb_img_url),
         created_at=climb.created_at.isoformat() if climb.created_at else None,
     )
 

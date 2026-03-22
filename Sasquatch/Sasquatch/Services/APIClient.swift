@@ -5,6 +5,7 @@ import Observation
 class APIClient {
     var baseURL = "http://localhost:8000"
     var authToken: String?
+    var authManager: AuthManager?
 
     private let decoder: JSONDecoder = {
         let d = JSONDecoder()
@@ -21,6 +22,12 @@ class APIClient {
     // MARK: - Generic Request
 
     private func request(_ path: String, method: String = "GET", body: (any Encodable)? = nil) async throws -> Data {
+        // Refresh token if we have an auth manager
+        if let authManager {
+            await authManager.refreshTokenIfNeeded()
+            authToken = authManager.authToken
+        }
+
         guard let url = URL(string: "\(baseURL)\(path)") else {
             throw URLError(.badURL)
         }

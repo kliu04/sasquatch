@@ -186,10 +186,13 @@ struct GenerateClimbSheet: View {
                 difficulty: difficulty,
                 style: apiStyle
             )
-            onGenerated(climbs)
-            dismiss()
+            if climbs.isEmpty {
+                errorMessage = "No routes found for this difficulty. Try a different setting."
+            } else {
+                onGenerated(climbs)
+            }
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = "Generation failed: \(error.localizedDescription)"
         }
         isGenerating = false
     }

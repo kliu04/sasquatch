@@ -109,7 +109,7 @@ def _wall_summary(wall: Wall) -> WallSummary:
         name=wall.name,
         status=wall.status.name if wall.status else "pending_upload",
         hold_count=wall.hold_count,
-        wall_img_url=wall.wall_img_url,
+        wall_img_url=_storage.signed_url_or_none(wall.wall_img_url),
         created_at=wall.created_at.isoformat() if wall.created_at else None,
     )
 
@@ -119,9 +119,9 @@ def _wall_detail(wall: Wall) -> WallDetail:
         id=wall.id,
         name=wall.name,
         status=wall.status.name if wall.status else "pending_upload",
-        wall_img_url=wall.wall_img_url,
-        wall_ply_url=wall.wall_ply_url,
-        holds_image_url=wall.holds_image_url,
+        wall_img_url=_storage.signed_url_or_none(wall.wall_img_url),
+        wall_ply_url=_storage.signed_url_or_none(wall.wall_ply_url),
+        holds_image_url=_storage.signed_url_or_none(wall.holds_image_url),
         hold_count=wall.hold_count,
         error_message=wall.error_message,
         created_at=wall.created_at.isoformat() if wall.created_at else None,

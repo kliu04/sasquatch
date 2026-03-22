@@ -69,6 +69,7 @@ struct ContentView: View {
         .environment(auth)
         .task {
             api.baseURL = apiBaseURL
+            api.authManager = auth
             await auth.restoreSession()
             api.authToken = auth.authToken
         }

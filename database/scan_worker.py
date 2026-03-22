@@ -294,9 +294,38 @@ class ScanWorker:
             final_k=top_k,
         )
 
-        # Generate visualization images if scan state is cached
+        # Generate visualization images
         images: list[bytes] = []
         scan_state = self._scans.get(wall_id)
+
+        # If scan state isn't cached, build a minimal one from the wall image
+        if scan_state is None:
+            from database.db import SessionLocal
+            db = SessionLocal()
+            try:
+                wall = db.query(Wall).filter(Wall.id == wall_id).first()
+                if wall and wall.wall_img_url:
+                    try:
+                        tmp_path = self._storage.download_to_tempfile(
+                            self._storage._gcs_path(wall.wall_img_url), suffix=".png"
+                        )
+                        photo = cv2.imread(str(tmp_path))
+                        tmp_path.unlink(missing_ok=True)
+                        if photo is not None:
+                            scan_state = ScanState(
+                                scan_id=str(wall_id),
+                                scan_dir=Path("/tmp"),
+                                ply_path=Path("/tmp/dummy.ply"),
+                            )
+                            scan_state.photo = photo
+                            scan_state.holds = holds
+                            scan_state.masks = None
+                            scan_state.records = None
+                    except Exception as e:
+                        print(f"Failed to download wall image for route overlay: {e}")
+            finally:
+                db.close()
+
         if scan_state is not None:
             for route in routes:
                 route_img = draw_routes_overlay(scan_state, [route])

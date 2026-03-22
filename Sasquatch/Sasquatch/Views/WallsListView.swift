@@ -138,6 +138,7 @@ struct WallCard: View {
             RoundedRectangle(cornerRadius: 16)
                 .stroke(Color.sasquatchTextSecondary, lineWidth: 1)
         )
+        .contentShape(Rectangle())
     }
 
     private var thumbnailPlaceholder: some View {
