@@ -31,6 +31,7 @@ struct WallsListView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 24)
                 .padding(.top, 8)
+                .padding(.bottom, 24)
 
                 // Wall cards list
                 if isLoading {
