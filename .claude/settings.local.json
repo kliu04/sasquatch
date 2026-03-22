@@ -89,7 +89,8 @@
       "Bash(open:*)",
       "Bash(grep:*)",
       "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(d[0][''''climb_img_url'''']\\)\")",
-      "Bash(curl -s -X POST -H \"Authorization: Bearer dev\" -H \"Content-Type: application/json\" -d '{\"\"\"\"difficulty\"\"\"\": \"\"\"\"hard\"\"\"\", \"\"\"\"style\"\"\"\": \"\"\"\"dynamic\"\"\"\"}' http://localhost:8000/walls/45/climbs)"
+      "Bash(curl -s -X POST -H \"Authorization: Bearer dev\" -H \"Content-Type: application/json\" -d '{\"\"\"\"difficulty\"\"\"\": \"\"\"\"hard\"\"\"\", \"\"\"\"style\"\"\"\": \"\"\"\"dynamic\"\"\"\"}' http://localhost:8000/walls/45/climbs)",
+      "Bash(mcp__xcode__BuildProject)"
     ]
   }
 }

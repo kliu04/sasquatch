@@ -47,7 +47,6 @@ struct ClimbDetailView: View {
                     routeImage
                     tagsRow
                     actionButtons
-                    sendButton
                 }
                 .padding(.horizontal, 24)
                 .padding(.top, 20)
@@ -173,16 +172,22 @@ struct ClimbDetailView: View {
 
             Spacer()
 
-            if currentClimb.isSent {
-                Text("SENT!")
-                    .font(.system(size: 12, weight: .heavy))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 8)
-                    .frame(width: 48, height: 28)
-                    .background(Color.sasquatchSent)
-                    .clipShape(RoundedRectangle(cornerRadius: 4))
+            // Sent checkbox
+            Button {
+                if !currentClimb.isSent {
+                    Task { await markSent() }
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: currentClimb.isSent ? "checkmark.square.fill" : "square")
+                        .font(.system(size: 20))
+                        .foregroundStyle(currentClimb.isSent ? Color.sasquatchSent : Color.sasquatchText)
+                    Text(currentClimb.isSent ? "Sent!" : "Sent?")
+                        .font(.sasquatchBody(14))
+                        .foregroundStyle(currentClimb.isSent ? Color.sasquatchSent : Color.sasquatchText)
+                }
             }
+            .disabled(currentClimb.isSent)
         }
     }
 
@@ -212,26 +217,6 @@ struct ClimbDetailView: View {
                     )
             }
         }
-    }
-
-    private var sendButton: some View {
-        Button {
-            Task { await markSent() }
-        } label: {
-            HStack(spacing: 8) {
-                Image(systemName: currentClimb.isSent ? "checkmark.circle.fill" : "checkmark.circle")
-                    .font(.system(size: 20))
-                Text(currentClimb.isSent ? "Sent!" : "Mark as Sent")
-                    .font(.system(size: 16, weight: .semibold))
-            }
-            .foregroundStyle(.white)
-            .frame(maxWidth: .infinity)
-            .frame(height: 56)
-            .background(Color.sasquatchSent)
-            .clipShape(Capsule())
-        }
-        .disabled(currentClimb.isSent)
-        .opacity(currentClimb.isSent ? 0.7 : 1)
     }
 
     // MARK: - Actions
