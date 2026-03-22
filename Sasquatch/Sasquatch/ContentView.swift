@@ -38,6 +38,9 @@ struct ContentView: View {
                             case .sent:
                                 SentClimbsView()
                                     .environment(api)
+                            case .settings:
+                                SettingsView()
+                                    .environment(api)
                             }
                         }
                         .navigationDestination(for: WallDestination.self) { dest in
@@ -79,6 +82,7 @@ struct ContentView: View {
 enum HomeDestination: Hashable {
     case favourites
     case sent
+    case settings
 }
 
 enum WallDestination: Hashable {
