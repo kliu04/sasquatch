@@ -25,7 +25,7 @@ struct WallsListView: View {
                         .frame(width: 60, height: 60)
 
                     Text("Saved Walls")
-                        .font(.system(size: 32, weight: .black))
+                        .font(.sasquatchTitle(32))
                         .foregroundStyle(Color.sasquatchText)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
