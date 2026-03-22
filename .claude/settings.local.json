@@ -11,7 +11,24 @@
       "Bash(SCAN_ID=\"1d246465-3663-4655-98ab-723a8b84c8b5\" curl -sv --max-time 30 \"http://localhost:8001/scans/$SCAN_ID/debug/routes?difficulty=easy&style=dynamic&top_k=3\" -o /dev/null)",
       "Bash(SCAN_ID=\"1d246465-3663-4655-98ab-723a8b84c8b5\")",
       "Read(//tmp/**)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Bash(find /Users/randyzhu/Desktop/produhacks/sasquatch -maxdepth 1 -type f -name *.txt -o -name *.sh -o -name *.md)",
+      "Bash(python3.11 -c \"\nimport ast, sys\nfiles = [\n    'database/schema.py',\n    'database/storage.py', \n    'database/scan_worker.py',\n    'database/server.py',\n    'database/routers/walls.py',\n    'database/routers/climbs.py',\n    'database/routers/users.py',\n]\nfor f in files:\n    try:\n        with open\\(f\\) as fh:\n            ast.parse\\(fh.read\\(\\)\\)\n        print\\(f'{f}: OK'\\)\n    except SyntaxError as e:\n        print\\(f'{f}: SYNTAX ERROR - {e}'\\)\n        sys.exit\\(1\\)\nprint\\('All files parse OK'\\)\n\")",
+      "Bash(ls .venv/bin/python*)",
+      "Bash(ls hold-detector/.venv/bin/python*)",
+      "Bash(.venv/bin/pip list:*)",
+      "Bash(.venv/bin/pip install:*)",
+      "Bash(PYTHONPATH=.:hold-detector .venv/bin/python -c \"\nfrom database.schema import WallStatus, Difficulty, Classification\nprint\\(f'WallStatus: {[s.name for s in WallStatus]}'\\)\nprint\\('Schema OK'\\)\n\nfrom database.server import app\nprint\\(f'App routes:'\\)\nfor r in app.routes:\n    if hasattr\\(r, 'path'\\) and hasattr\\(r, 'methods'\\):\n        print\\(f'  {list\\(r.methods\\)} {r.path}'\\)\nprint\\('Server import OK'\\)\n\" 2>&1)",
+      "Bash(PYTHONPATH=. .venv/bin/python -c \"\nfrom database.db import engine\nwith engine.connect\\(\\) as conn:\n    from sqlalchemy import text\n    result = conn.execute\\(text\\('SELECT column_name FROM information_schema.columns WHERE table_name = \\\\'walls\\\\' ORDER BY ordinal_position'\\)\\)\n    print\\('walls:', [r[0] for r in result]\\)\n    result = conn.execute\\(text\\('SELECT column_name FROM information_schema.columns WHERE table_name = \\\\'climbs\\\\' ORDER BY ordinal_position'\\)\\)\n    print\\('climbs:', [r[0] for r in result]\\)\nprint\\('Connected OK'\\)\n\" 2>&1)",
+      "Bash(PYTHONPATH=.:hold-detector .venv/bin/python test_api.py 2>&1)",
+      "Bash(ls:*)",
+      "Bash(claude plugin:*)",
+      "Bash(PYTHONPATH=.:hold-detector .venv/bin/python -c \"\nfrom database.storage import GCSStorage\nstorage = GCSStorage\\(\\)\nurl = storage.generate_upload_url\\('test/verify.txt', 'text/plain', 5\\)\nprint\\(f'Signed URL works: {url[:60]}...'\\)\nstorage.upload_bytes\\(b'test', 'test/verify.txt', 'text/plain'\\)\ntmp = storage.download_to_tempfile\\('test/verify.txt', '.txt'\\)\nprint\\(f'Round-trip OK: {open\\(tmp\\).read\\(\\)}'\\)\ntmp.unlink\\(\\)\nstorage.delete_prefix\\('test/'\\)\nprint\\('ALL OK - dotenv loading works'\\)\n\" 2>&1)",
+      "Bash(PYTHONPATH=.:hold-detector .venv/bin/python tests/test_api.py 2>&1)",
+      "Bash(PYTHONPATH=. .venv/bin/python -c \"\nfrom database.db import engine\nfrom sqlalchemy import text\nwith engine.connect\\(\\) as conn:\n    r = conn.execute\\(text\\(\\\\\"SELECT column_name, data_type FROM information_schema.columns WHERE table_name='users' ORDER BY ordinal_position\\\\\"\\)\\)\n    for row in r:\n        print\\(f'  {row[0]}: {row[1]}'\\)\n\" 2>&1)",
+      "Bash(PYTHONPATH=. .venv/bin/python -c \"\nfrom database.db import engine\nfrom sqlalchemy import text\nwith engine.begin\\(\\) as conn:\n    conn.execute\\(text\\('ALTER TABLE users ADD COLUMN IF NOT EXISTS google_id VARCHAR UNIQUE'\\)\\)\n    print\\('Added google_id column'\\)\n    \n    r = conn.execute\\(text\\('SELECT column_name FROM information_schema.columns WHERE table_name=\\\\'users\\\\' ORDER BY ordinal_position'\\)\\)\n    print\\(f'Users columns: {[row[0] for row in r]}'\\)\n\" 2>&1)",
+      "Bash(find /Users/randyzhu/Desktop/produhacks/sasquatch -maxdepth 1 -name *.md -o -name *.swift)",
+      "mcp__plugin_figma_figma__get_design_context"
     ]
   }
 }

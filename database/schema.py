@@ -1,12 +1,14 @@
+from datetime import datetime
+
 from sqlalchemy import (
+    Boolean,
     Column,
+    DateTime,
+    Enum,
+    Float,
+    ForeignKey,
     Integer,
     String,
-    ForeignKey,
-    Float,
-    Enum,
-    Boolean,
-    DateTime,
 )
 from sqlalchemy.orm import DeclarativeBase, relationship
 
@@ -24,6 +26,14 @@ class Difficulty(enum.Enum):
 class Classification(enum.Enum):
     static = enum.auto()
     dynamic = enum.auto()
+
+
+@enum.unique
+class WallStatus(enum.Enum):
+    pending_upload = enum.auto()
+    processing = enum.auto()
+    ready = enum.auto()
+    error = enum.auto()
 
 
 class Base(DeclarativeBase):
@@ -44,9 +54,15 @@ class Wall(Base):
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id"))
     name = Column(String)
-    climbs = relationship("Climb")
-    wall_img_url = Column(String)
-    wall_ply_url = Column(String)
+    status = Column(Enum(WallStatus), default=WallStatus.pending_upload)
+    error_message = Column(String, nullable=True)
+    hold_count = Column(Integer, nullable=True)
+    holds_json = Column(String, nullable=True)
+    wall_img_url = Column(String, nullable=True)
+    wall_ply_url = Column(String, nullable=True)
+    holds_image_url = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    climbs = relationship("Climb", cascade="all, delete-orphan")
 
 
 class Climb(Base):
@@ -55,6 +71,9 @@ class Climb(Base):
     wall_id = Column(Integer, ForeignKey("walls.id"))
     difficulty = Column(Enum(Difficulty))
     classification = Column(Enum(Classification))
-    is_favourite = Column(Boolean)
-    date_sent = Column(DateTime)
-    climb_img_url = Column(String)
+    route_hold_ids = Column(String, nullable=True)
+    is_saved = Column(Boolean, default=False)
+    is_favourite = Column(Boolean, default=False)
+    date_sent = Column(DateTime, nullable=True)
+    climb_img_url = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)

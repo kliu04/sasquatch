@@ -9,3 +9,12 @@ hold-detector/archive/model/triplet_network_final.pt
 hold-detector/archive/model/test_results.json
 .git
 .claude
+gen-lang-client-*.json
+tests/
+API.md
+CLAUDE.md
+*.md
+lidar/
+LiDARCapture/
+dataset/
+datasets/
