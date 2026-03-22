@@ -34,8 +34,9 @@ class ScanWorker:
         self._ready_events: dict[int, asyncio.Event] = {}
         self._loop: asyncio.AbstractEventLoop | None = None
 
-    def _ensure_engine(self) -> SasquatchEngine:
+    def _ensure_engine(self):
         if self._engine is None:
+            from api.main import SasquatchEngine
             self._engine = SasquatchEngine()
         return self._engine
 
@@ -121,6 +122,7 @@ class ScanWorker:
 
     def _process_3d(self, wall_id: int, wall: Wall, ply_tmp: Path, png_tmp: Path, db) -> None:
         """Full 3D pipeline: PLY + PNG -> holds with 3D positions and depth."""
+        import cv2
         engine = self._ensure_engine()
         scan = engine.create_scan(ply_tmp, png_tmp)
 
@@ -160,6 +162,9 @@ class ScanWorker:
 
     def _process_2d(self, wall_id: int, wall: Wall, png_tmp: Path, db) -> None:
         """2D-only pipeline: PNG -> holds with synthetic metric positions for route generation."""
+        import cv2
+        from api.schemas import BBox, Hold, Position3D
+        from api.scan_service import ScanState, draw_debug_overlay
         engine = self._ensure_engine()
         hold_app = engine._hold_app
 
@@ -258,6 +263,11 @@ class ScanWorker:
 
         Returns (routes, images) where images is a list of PNG bytes per route.
         """
+        import cv2
+        from api.schemas import Hold
+        from api.route_service import build_routes
+        from api.scan_service import ScanState, draw_routes_overlay
+
         # Reconstruct Hold objects from JSON
         holds_data = json.loads(holds_json)
         holds = [
