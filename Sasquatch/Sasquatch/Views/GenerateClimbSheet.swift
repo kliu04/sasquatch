@@ -35,7 +35,7 @@ struct GenerateClimbSheet: View {
     }
 
     var body: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 12) {
             // Close button
             HStack {
                 Spacer()
@@ -49,10 +49,11 @@ struct GenerateClimbSheet: View {
                     Image(systemName: "xmark")
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(Color.sasquatchText)
-                        .frame(width: 32, height: 32)
+                        .frame(width: 28, height: 28)
                         .contentShape(Rectangle())
                 }
             }
+            .padding(.bottom, -8)
 
             // Wall image
             wallImage
@@ -82,8 +83,9 @@ struct GenerateClimbSheet: View {
                 postGenerationButtons
             }
         }
-        .padding(.horizontal, 24)
-        .padding(.vertical, 36)
+        .padding(.horizontal, 20)
+        .padding(.top, 12)
+        .padding(.bottom, 20)
         .background(.white)
         .clipShape(RoundedRectangle(cornerRadius: 24))
         .padding(.horizontal, 24)
