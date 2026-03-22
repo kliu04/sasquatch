@@ -18,6 +18,8 @@ _HOLD_DETECTOR_DIR = Path(__file__).parent.parent / "hold-detector"
 if str(_HOLD_DETECTOR_DIR) not in sys.path:
     sys.path.insert(0, str(_HOLD_DETECTOR_DIR))
 
+import numpy as np
+
 from api.main import SasquatchEngine
 from api.route_service import build_routes
 from api.scan_service import (
@@ -27,7 +29,8 @@ from api.scan_service import (
     prepare_scan,
     process_scan,
 )
-from api.schemas import Hold
+from api.schemas import BBox, Hold, Position3D
+from hold_detector.app import HoldDetectionApp
 
 from database.db import SessionLocal
 from database.schema import Wall, WallStatus
@@ -83,7 +86,7 @@ class ScanWorker:
         thread.start()
 
     def _process_wall(self, wall_id: int) -> None:
-        """Run full scan pipeline in background thread."""
+        """Run scan pipeline in background thread. Picks 3D or 2D mode based on PLY presence."""
         db = SessionLocal()
         ply_tmp = None
         png_tmp = None
@@ -92,59 +95,23 @@ class ScanWorker:
             if wall is None:
                 return
 
-            # Update status
             wall.status = WallStatus.processing
             db.commit()
 
-            # Download files from GCS
-            ply_gcs = f"walls/{wall_id}/scan.ply"
+            # Download PNG (always required)
             png_gcs = f"walls/{wall_id}/photo.png"
-            ply_tmp = self._storage.download_to_tempfile(ply_gcs, suffix=".ply")
             png_tmp = self._storage.download_to_tempfile(png_gcs, suffix=".png")
 
-            # Run the engine
-            engine = self._ensure_engine()
-            scan = engine.create_scan(ply_tmp, png_tmp)
+            # Check if PLY exists (wall_ply_url is set during wall creation when has_ply=true)
+            has_ply = wall.wall_ply_url is not None
+            if has_ply:
+                ply_gcs = f"walls/{wall_id}/scan.ply"
+                ply_tmp = self._storage.download_to_tempfile(ply_gcs, suffix=".ply")
 
-            # Store scan state for route generation later
-            self._scans[wall_id] = scan._state
-
-            # Serialize holds to JSON
-            holds = scan.get_holds()
-            holds_data = [
-                {
-                    "id": h.id,
-                    "position": {"x": h.position.x, "y": h.position.y, "z": h.position.z},
-                    "bbox": {"x1": h.bbox.x1, "y1": h.bbox.y1, "x2": h.bbox.x2, "y2": h.bbox.y2},
-                    "confidence": h.confidence,
-                    "depth": h.depth,
-                    "hold_type": h.hold_type,
-                }
-                for h in holds
-            ]
-
-            # Generate holds overlay image
-            holds_img = scan.debug_holds_image()
-            _, holds_png = cv2.imencode(".png", holds_img)
-            holds_img_url = self._storage.upload_bytes(
-                holds_png.tobytes(),
-                f"walls/{wall_id}/holds_overlay.png",
-            )
-
-            # Also upload the wall photo (the rendered/resized version used for detection)
-            _, photo_png = cv2.imencode(".png", scan.photo)
-            wall_img_url = self._storage.upload_bytes(
-                photo_png.tobytes(),
-                f"walls/{wall_id}/wall_photo.png",
-            )
-
-            # Update DB
-            wall.status = WallStatus.ready
-            wall.hold_count = len(holds)
-            wall.holds_json = json.dumps(holds_data)
-            wall.holds_image_url = holds_img_url
-            wall.wall_img_url = wall_img_url
-            db.commit()
+            if has_ply:
+                self._process_3d(wall_id, wall, ply_tmp, png_tmp, db)
+            else:
+                self._process_2d(wall_id, wall, png_tmp, db)
 
         except Exception as exc:
             db.rollback()
@@ -158,14 +125,138 @@ class ScanWorker:
             traceback.print_exc()
         finally:
             db.close()
-            # Clean up temp files
             if ply_tmp and ply_tmp.exists():
                 ply_tmp.unlink()
             if png_tmp and png_tmp.exists():
                 png_tmp.unlink()
-            # Signal long-pollers
             if self._loop and wall_id in self._ready_events:
                 self._loop.call_soon_threadsafe(self._ready_events[wall_id].set)
+
+    def _process_3d(self, wall_id: int, wall: Wall, ply_tmp: Path, png_tmp: Path, db) -> None:
+        """Full 3D pipeline: PLY + PNG -> holds with 3D positions and depth."""
+        engine = self._ensure_engine()
+        scan = engine.create_scan(ply_tmp, png_tmp)
+
+        self._scans[wall_id] = scan._state
+
+        holds = scan.get_holds()
+        holds_data = [
+            {
+                "id": h.id,
+                "position": {"x": h.position.x, "y": h.position.y, "z": h.position.z},
+                "bbox": {"x1": h.bbox.x1, "y1": h.bbox.y1, "x2": h.bbox.x2, "y2": h.bbox.y2},
+                "confidence": h.confidence,
+                "depth": h.depth,
+                "hold_type": h.hold_type,
+            }
+            for h in holds
+        ]
+
+        # Generate and upload images
+        holds_img = scan.debug_holds_image()
+        _, holds_png = cv2.imencode(".png", holds_img)
+        holds_img_url = self._storage.upload_bytes(
+            holds_png.tobytes(), f"walls/{wall_id}/holds_overlay.png",
+        )
+
+        _, photo_png = cv2.imencode(".png", scan.photo)
+        wall_img_url = self._storage.upload_bytes(
+            photo_png.tobytes(), f"walls/{wall_id}/wall_photo.png",
+        )
+
+        wall.status = WallStatus.ready
+        wall.hold_count = len(holds)
+        wall.holds_json = json.dumps(holds_data)
+        wall.holds_image_url = holds_img_url
+        wall.wall_img_url = wall_img_url
+        db.commit()
+
+    def _process_2d(self, wall_id: int, wall: Wall, png_tmp: Path, db) -> None:
+        """2D-only pipeline: PNG -> holds with synthetic metric positions for route generation."""
+        engine = self._ensure_engine()
+        hold_app = engine._hold_app
+
+        # Read the image
+        photo = cv2.imread(str(png_tmp))
+        if photo is None:
+            raise ValueError(f"Could not read image: {png_tmp}")
+
+        # Run detection directly (no Open3D needed)
+        records, masks = hold_app.detect(f"wall_{wall_id}", photo)
+
+        # Map pixel positions to synthetic 3D metre coordinates.
+        # Assume the image spans ~4m wide x ~5m tall (typical climbing wall).
+        # This lets build_routes() work with its metre-based distance thresholds.
+        img_h, img_w = photo.shape[:2]
+        wall_width_m = 4.0
+        wall_height_m = 5.0
+        px_to_m_x = wall_width_m / img_w
+        px_to_m_y = wall_height_m / img_h
+
+        holds: list[Hold] = []
+        for record in records:
+            x1, y1, x2, y2 = record.bbox_xyxy
+            cx, cy = record.mask_centroid
+            # Synthetic depth from bbox area (larger hold = deeper/more grabbable)
+            area_px = (x2 - x1) * (y2 - y1)
+            depth = (area_px / (img_w * img_h)) * 0.1  # normalize to ~0-0.1m range
+            holds.append(Hold(
+                id=record.instance_id,
+                position=Position3D(
+                    x=float(cx) * px_to_m_x,
+                    y=float(cy) * px_to_m_y,
+                    z=0.0,
+                ),
+                bbox=BBox(x1=x1, y1=y1, x2=x2, y2=y2),
+                confidence=record.score,
+                depth=max(depth, 0.005),
+            ))
+
+        holds_data = [
+            {
+                "id": h.id,
+                "position": {"x": h.position.x, "y": h.position.y, "z": h.position.z},
+                "bbox": {"x1": h.bbox.x1, "y1": h.bbox.y1, "x2": h.bbox.x2, "y2": h.bbox.y2},
+                "confidence": h.confidence,
+                "depth": h.depth,
+                "hold_type": h.hold_type,
+            }
+            for h in holds
+        ]
+
+        # Build a minimal ScanState for visualization
+        state = ScanState(
+            scan_id=f"wall_{wall_id}",
+            scan_dir=png_tmp.parent,
+            ply_path=png_tmp,  # placeholder
+            png_path=png_tmp,
+            photo=photo,
+            records=records,
+            masks=masks,
+            holds=holds,
+            status="ready",
+        )
+        self._scans[wall_id] = state
+
+        # Generate holds overlay
+        holds_img = draw_debug_overlay(state)
+        _, holds_png_bytes = cv2.imencode(".png", holds_img)
+        holds_img_url = self._storage.upload_bytes(
+            holds_png_bytes.tobytes(), f"walls/{wall_id}/holds_overlay.png",
+        )
+
+        # Upload wall photo
+        _, photo_png = cv2.imencode(".png", photo)
+        wall_img_url = self._storage.upload_bytes(
+            photo_png.tobytes(), f"walls/{wall_id}/wall_photo.png",
+        )
+
+        wall.status = WallStatus.ready
+        wall.hold_count = len(holds)
+        wall.holds_json = json.dumps(holds_data)
+        wall.holds_image_url = holds_img_url
+        wall.wall_img_url = wall_img_url
+        db.commit()
 
     def generate_routes(
         self,

@@ -1,61 +1,50 @@
-//
-//  ContentView.swift
-//  Sasquatch
-//
-//  Created by Randy Zhu on 2026-03-21.
-//
-
 import SwiftUI
-import SwiftData
 
 struct ContentView: View {
-    @Environment(\.modelContext) private var modelContext
-    @Query private var items: [Item]
+    @State private var api = APIClient()
+    @State private var auth = AuthManager()
+    @State private var selectedTab = 0
+    @State private var showScan = false
 
     var body: some View {
-        NavigationSplitView {
-            List {
-                ForEach(items) { item in
-                    NavigationLink {
-                        Text("Item at \(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))")
-                    } label: {
-                        Text(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))
+        Group {
+            if auth.isSignedIn {
+                ZStack(alignment: .bottom) {
+                    NavigationStack {
+                        Group {
+                            switch selectedTab {
+                            case 0:
+                                HomeView()
+                            default:
+                                WallsListView()
+                            }
+                        }
+                        .navigationDestination(isPresented: $showScan) {
+                            ScanCaptureView()
+                        }
+                    }
+
+                    if !showScan {
+                        BottomNavBar(selectedTab: $selectedTab) {
+                            showScan = true
+                        }
                     }
                 }
-                .onDelete(perform: deleteItems)
+                .ignoresSafeArea(.keyboard)
+            } else {
+                SignInView()
             }
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    EditButton()
-                }
-                ToolbarItem {
-                    Button(action: addItem) {
-                        Label("Add Item", systemImage: "plus")
-                    }
-                }
-            }
-        } detail: {
-            Text("Select an item")
         }
-    }
-
-    private func addItem() {
-        withAnimation {
-            let newItem = Item(timestamp: Date())
-            modelContext.insert(newItem)
-        }
-    }
-
-    private func deleteItems(offsets: IndexSet) {
-        withAnimation {
-            for index in offsets {
-                modelContext.delete(items[index])
-            }
+        .environment(api)
+        .environment(auth)
+        .task {
+            api.baseURL = apiBaseURL
+            await auth.restoreSession()
+            api.authToken = auth.authToken
         }
     }
 }
 
 #Preview {
     ContentView()
-        .modelContainer(for: Item.self, inMemory: true)
 }

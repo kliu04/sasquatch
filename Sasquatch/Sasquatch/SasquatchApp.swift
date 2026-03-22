@@ -1,32 +1,28 @@
-//
-//  SasquatchApp.swift
-//  Sasquatch
-//
-//  Created by Randy Zhu on 2026-03-21.
-//
-
 import SwiftUI
-import SwiftData
+import GoogleSignIn
+
+// ⚠️ Configuration
+let googleClientID = "379138604067-66fkgehu3knv49ebbe3pc41jv8ogcaih.apps.googleusercontent.com"
+
+// Change to your server IP/hostname for testing. Examples:
+//   "http://localhost:8000"          — simulator
+//   "http://192.168.1.42:8000"      — device on same WiFi
+//   "http://34.11.229.123:8000"     — cloud server
+// @wevie try using tailscale so your phone can connect to the mac
+let apiBaseURL = "http://100.114.110.17:8000"
 
 @main
 struct SasquatchApp: App {
-    var sharedModelContainer: ModelContainer = {
-        let schema = Schema([
-            Item.self,
-        ])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
-
-        do {
-            return try ModelContainer(for: schema, configurations: [modelConfiguration])
-        } catch {
-            fatalError("Could not create ModelContainer: \(error)")
-        }
-    }()
+    init() {
+        GIDSignIn.sharedInstance.configuration = GIDConfiguration(clientID: googleClientID)
+    }
 
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .onOpenURL { url in
+                    GIDSignIn.sharedInstance.handle(url)
+                }
         }
-        .modelContainer(sharedModelContainer)
     }
 }

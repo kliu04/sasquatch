@@ -30,13 +30,14 @@ def configure(storage: GCSStorage, worker: ScanWorker) -> None:
 
 class WallCreate(BaseModel):
     name: str
+    has_ply: bool = True  # False for 2D-only (photo without LiDAR scan)
 
 
 class WallCreateResponse(BaseModel):
     id: int
     name: str
     status: str
-    ply_upload_url: str
+    ply_upload_url: str | None  # null when has_ply=false
     png_upload_url: str
     created_at: str | None = None
 
@@ -144,14 +145,15 @@ def create_wall(
     db.commit()
     db.refresh(wall)
 
-    ply_gcs_path = f"walls/{wall.id}/scan.ply"
     png_gcs_path = f"walls/{wall.id}/photo.png"
-
-    ply_url = _storage.generate_upload_url(ply_gcs_path, content_type="application/octet-stream")
     png_url = _storage.generate_upload_url(png_gcs_path, content_type="image/png")
 
-    wall.wall_ply_url = _storage.public_url(ply_gcs_path)
-    db.commit()
+    ply_url = None
+    if body.has_ply:
+        ply_gcs_path = f"walls/{wall.id}/scan.ply"
+        ply_url = _storage.generate_upload_url(ply_gcs_path, content_type="application/octet-stream")
+        wall.wall_ply_url = _storage.public_url(ply_gcs_path)
+        db.commit()
 
     return WallCreateResponse(
         id=wall.id,

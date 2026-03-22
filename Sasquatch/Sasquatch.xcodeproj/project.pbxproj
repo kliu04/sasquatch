@@ -6,6 +6,11 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		763B34F72F6FA89B00BA8103 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = AA000002AAAA000200000002 /* GoogleSignIn */; };
+		763B34F82F6FA89B00BA8103 /* GoogleSignInSwift in Frameworks */ = {isa = PBXBuildFile; productRef = AA000003AAAA000300000003 /* GoogleSignInSwift */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		763B34172F6F83DD00BA8103 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -52,6 +57,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				763B34F82F6FA89B00BA8103 /* GoogleSignInSwift in Frameworks */,
+				763B34F72F6FA89B00BA8103 /* GoogleSignIn in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -112,6 +119,8 @@
 			);
 			name = Sasquatch;
 			packageProductDependencies = (
+				AA000002AAAA000200000002 /* GoogleSignIn */,
+				AA000003AAAA000300000003 /* GoogleSignInSwift */,
 			);
 			productName = Sasquatch;
 			productReference = 763B34072F6F83DB00BA8103 /* Sasquatch.app */;
@@ -195,6 +204,9 @@
 			);
 			mainGroup = 763B33FE2F6F83DB00BA8103;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				AA000001AAAA000100000001 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 763B34082F6F83DB00BA8103 /* Products */;
 			projectDirPath = "";
@@ -400,6 +412,8 @@
 				DEVELOPMENT_TEAM = 62RDBY874V;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Info.plist;
+				INFOPLIST_KEY_NSCameraUsageDescription = "Sasquatch uses the camera and LiDAR sensor to scan climbing walls and detect holds.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -432,6 +446,8 @@
 				DEVELOPMENT_TEAM = 62RDBY874V;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Info.plist;
+				INFOPLIST_KEY_NSCameraUsageDescription = "Sasquatch uses the camera and LiDAR sensor to scan climbing walls and detect holds.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -578,6 +594,30 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		AA000001AAAA000100000001 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/google/GoogleSignIn-iOS";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 8.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		AA000002AAAA000200000002 /* GoogleSignIn */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AA000001AAAA000100000001 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;
+			productName = GoogleSignIn;
+		};
+		AA000003AAAA000300000003 /* GoogleSignInSwift */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AA000001AAAA000100000001 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;
+			productName = GoogleSignInSwift;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 763B33FF2F6F83DB00BA8103 /* Project object */;
 }

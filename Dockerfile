@@ -4,9 +4,9 @@ FROM python:3.11-slim
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     git \
-    libgl1-mesa-dri \
+    libgl1 \
     libglx-mesa0 \
-    libegl-mesa0 \
+    libegl1 \
     libglib2.0-0 \
     libgomp1 \
     libsm6 \

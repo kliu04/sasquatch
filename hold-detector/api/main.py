@@ -35,6 +35,11 @@ _BASE_DIR = Path(__file__).parent.parent  # hold-detector/
 
 
 def _default_config() -> AppConfig:
+    # Load env from both .env locations
+    from dotenv import load_dotenv
+    load_dotenv(_BASE_DIR / ".env")
+    load_dotenv(_BASE_DIR.parent / ".env")
+
     return AppConfig(
         images=[],
         detectron=DetectronConfig(
@@ -45,7 +50,7 @@ def _default_config() -> AppConfig:
             max_detections=300,
         ),
         tape_filter=TapeFilterConfig(
-            enabled=False,
+            enabled=True,
             uniformity_std=18.0,
             min_fill=0.58,
             min_aspect=1.0,
