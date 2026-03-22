@@ -18,16 +18,21 @@ def get_current_user(
 
     token = authorization.removeprefix("Bearer ")
 
-    try:
-        decoded = id_token.verify_oauth2_token(
-            token,
-            google_requests.Request(),
-            audience=GOOGLE_CLIENT_ID,
-        )
-    except ValueError as e:
-        raise HTTPException(401, f"Invalid token: {e}")
+    # Dev bypass: "Bearer dev" skips Google verification
+    if token == "dev":
+        google_id = "dev-user"
+        decoded = {"sub": google_id, "name": "Dev User"}
+    else:
+        try:
+            decoded = id_token.verify_oauth2_token(
+                token,
+                google_requests.Request(),
+                audience=GOOGLE_CLIENT_ID,
+            )
+        except ValueError as e:
+            raise HTTPException(401, f"Invalid token: {e}")
 
-    google_id: str = decoded["sub"]
+        google_id = decoded["sub"]
 
     user = db.query(User).filter(User.google_id == google_id).first()
     if user is None:

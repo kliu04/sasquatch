@@ -25,6 +25,11 @@ env/
 .env.*
 !.env.example
 
+# Service account keys and credentials
+*-credentials.json
+*-service-account.json
+gen-lang-client-*.json
+
 # Datasets and converted training data
 dataset/
 datasets/

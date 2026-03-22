@@ -11,8 +11,8 @@ from api.schemas import Hold
 # ---------------------------------------------------------------------------
 
 DIFFICULTY_BUDGETS: dict[str, float] = {
-    "easy":   10.0,
-    "medium": 6.0,
+    "easy":   15.0,
+    "medium": 8.0,
     "hard":   4.0,
 }
 
@@ -235,9 +235,11 @@ def _search_routes(
     print(f"[routes] zones: bottom={len(bottom_ids)} holds (y>={y_max - zone_thresh:.0f}), top={len(top_ids)} holds (y<={y_min + zone_thresh:.0f})", flush=True)
 
     # Cap total DFS iterations to avoid combinatorial explosion on dense graphs.
-    MAX_ITERATIONS = 100_000
+    MAX_ITERATIONS = 200_000
     results: list[tuple[float, list[int]]] = []
     iterations = 0
+
+    MAX_HANDHOLDS = 10  # footholds added later bring total to ~17
 
     def dfs(cur_id: int, remaining: float, path: list[int], visited: set[int]) -> None:
         nonlocal iterations
@@ -246,6 +248,8 @@ def _search_routes(
             return
         if cur_id in top_ids:
             results.append((remaining, list(path)))
+            return
+        if len(path) >= MAX_HANDHOLDS:
             return
         cur_py = graph.nodes[cur_id].px_y
         for nb_id, cost in graph.adj[cur_id]:
@@ -320,14 +324,13 @@ def build_routes(
     candidates = _search_routes(g, budget, style=style, top_k=top_k)
     print(f"[routes] DFS found {len(candidates)} routes", flush=True)
 
-    # Score, dedupe, return top results
+    # Score and return top results
     scored = [(_score_route(r, g, style, difficulty), r) for r in candidates]
     scored.sort(key=lambda x: x[0], reverse=True)
     ranked = [r for _, r in scored]
-    diverse = _dedupe_routes(ranked)
-    print(f"[routes] after scoring+dedup: {len(diverse)} diverse routes", flush=True)
+    print(f"[routes] after scoring: {len(ranked)} routes", flush=True)
 
-    final = diverse[:final_k]
+    final = ranked[:final_k]
 
     # Add footholds along each route (post-hoc, doesn't affect pathfinding)
     final = _add_footholds(final, g, wingspan=mx)
@@ -342,13 +345,17 @@ def _add_footholds(
 ) -> list[list[int]]:
     """Add footholds along each route.
 
-    For each handhold, find nearby holds below it (within wingspan radius
-    in 3D) and randomly insert 1-2 as footholds. Also prepend 1-2 starting
-    footholds below the first handhold. This runs after route generation
-    so it doesn't affect cost/budget.
+    For every other handhold, find one foothold that is clearly below it
+    (at least 30% of wingspan away in pixel-y, and within 3D reach).
+    Footholds must maintain minimum spacing from all existing route holds
+    to avoid visual clutter.
     """
-    # Foot reach radius: roughly half wingspan (you reach down with your foot)
-    foot_radius_3d = wingspan * 0.6
+    MAX_TOTAL_HOLDS = 17
+    foot_radius_3d = wingspan * 0.8
+    # Minimum pixel-y gap: foothold must be below the handhold
+    min_py_gap = 20.0
+    # Minimum 3D distance from any existing route hold (prevents clustering)
+    min_spacing_3d = wingspan * 0.10
 
     result: list[list[int]] = []
     for route in routes:
@@ -357,42 +364,41 @@ def _add_footholds(
             continue
 
         route_set = set(route)
+        used_footholds: set[int] = set()
         enriched: list[int] = []
 
         for idx, hid in enumerate(route):
             hand = graph.nodes[hid]
 
-            # Find candidate footholds: below or near this handhold
-            candidates: list[tuple[float, int]] = []
-            for nid, node in graph.nodes.items():
-                if nid in route_set:
-                    continue
-                if nid in {fid for fid in enriched if fid not in route_set}:
-                    continue  # already used as foothold
-                # Must be below or at same height (higher pixel y = lower on wall)
-                if node.px_y < hand.px_y:
-                    continue
-                # Within 3D reach
-                dist = _dist3d(hand, node)
-                if dist > foot_radius_3d:
-                    continue
-                candidates.append((dist, nid))
+            # Only add footholds every other handhold (reduce clutter)
+            should_add = (idx == 0) or (idx % 2 == 0)
+            if should_add and len(enriched) + (len(route) - idx) < MAX_TOTAL_HOLDS:
+                candidates: list[tuple[float, int]] = []
+                for nid, node in graph.nodes.items():
+                    if nid in route_set or nid in used_footholds:
+                        continue
+                    # Must be clearly below (higher pixel y = lower on wall)
+                    if node.px_y < hand.px_y + min_py_gap:
+                        continue
+                    dist = _dist3d(hand, node)
+                    if dist > foot_radius_3d:
+                        continue
+                    # Check spacing from all holds already in the enriched route
+                    too_close = False
+                    for existing_id in enriched:
+                        if _dist3d(node, graph.nodes[existing_id]) < min_spacing_3d:
+                            too_close = True
+                            break
+                    if too_close:
+                        continue
+                    candidates.append((dist, nid))
 
-            # Pick footholds for this handhold
-            if candidates:
-                candidates.sort(key=lambda x: x[0])
-                pool = candidates[:5]
-                # First handhold: always 1-2 footholds (starting stance)
-                # Other handholds: usually 1 foothold, sometimes 2
-                if idx == 0:
-                    n_feet = random.choice([1, 2])
-                else:
-                    n_feet = random.choice([1, 1, 1, 2])
-                n_feet = min(n_feet, len(pool))
-                if n_feet > 0:
-                    chosen = random.sample(pool, n_feet)
-                    foot_ids = [fid for _, fid in chosen]
-                    enriched.extend(foot_ids)
+                if candidates:
+                    candidates.sort(key=lambda x: x[0])
+                    # Pick just 1 foothold (not 2) to keep routes clean
+                    _, foot_id = candidates[0]
+                    enriched.append(foot_id)
+                    used_footholds.add(foot_id)
 
             enriched.append(hid)
 
