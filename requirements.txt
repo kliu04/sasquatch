@@ -11,3 +11,4 @@ pydantic
 python-dotenv
 sqlalchemy
 psycopg2
+google-auth

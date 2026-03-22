@@ -1,6 +1,5 @@
 from sqlalchemy import (
     Column,
-    create_engine,
     Integer,
     String,
     ForeignKey,
@@ -34,6 +33,7 @@ class Base(DeclarativeBase):
 class User(Base):
     __tablename__ = "users"
     id = Column(Integer, primary_key=True)
+    google_id = Column(String, unique=True, nullable=False)
     username = Column(String)
     wingspan = Column(Float)
     walls = relationship("Wall")
@@ -58,7 +58,3 @@ class Climb(Base):
     is_favourite = Column(Boolean)
     date_sent = Column(DateTime)
     climb_img_url = Column(String)
-
-engine = create_engine('postgresql://postgres:dev@34.11.229.123:5432/sasquatch')
-Base.metadata.drop_all(engine)
-Base.metadata.create_all(engine)
