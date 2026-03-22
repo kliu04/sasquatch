@@ -215,6 +215,25 @@ async def get_wall(
     return _wall_detail(wall)
 
 
+class WallUpdate(BaseModel):
+    name: str | None = None
+
+
+@router.patch("/{wall_id}", response_model=WallDetail)
+def update_wall(
+    wall_id: int,
+    body: WallUpdate,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    wall = _get_user_wall(db, user.id, wall_id)
+    if body.name is not None:
+        wall.name = body.name
+    db.commit()
+    db.refresh(wall)
+    return _wall_detail(wall)
+
+
 @router.delete("/{wall_id}", status_code=204)
 def delete_wall(
     wall_id: int,

@@ -71,6 +71,12 @@ class APIClient {
         _ = try await request("/walls/\(wallId)/process", method: "POST")
     }
 
+    func updateWall(_ id: Int, name: String) async throws -> Wall {
+        let body = ["name": name]
+        let data = try await request("/walls/\(id)", method: "PATCH", body: body)
+        return try decoder.decode(Wall.self, from: data)
+    }
+
     func deleteWall(_ id: Int) async throws {
         _ = try await request("/walls/\(id)", method: "DELETE")
     }
