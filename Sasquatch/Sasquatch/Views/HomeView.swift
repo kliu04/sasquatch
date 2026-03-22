@@ -6,6 +6,7 @@ struct HomeView: View {
     @Environment(AuthManager.self) private var auth
     @Binding var navigationPath: NavigationPath
 
+    @State private var userProfile: UserProfile?
     @State private var weeklyStats: [(day: String, count: Int)] = []
     @State private var monthlyStats: [(day: String, count: Int)] = []
     @State private var activityEvents: [ActivityEvent] = []
@@ -42,6 +43,13 @@ struct HomeView: View {
             guard api.authToken != nil else { return }
             await loadData()
         }
+        .onAppear {
+            guard api.authToken != nil else { return }
+            Task {
+                do { userProfile = try await api.getMe() }
+                catch { print("Failed to refresh profile: \(error)") }
+            }
+        }
     }
 
     // MARK: - Subviews
@@ -60,11 +68,11 @@ struct HomeView: View {
                     )
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Sasquatch \u{26F0}\u{FE0F}")
+                    Text("\(userProfile?.username ?? "Sasquatch") \u{26F0}\u{FE0F}")
                         .font(.sasquatchTitle(24))
                         .foregroundStyle(Color.sasquatchText)
 
-                    Text("6'7\" | Started climbing January 5, 2026")
+                    Text("\(heightDisplay) | Started climbing January 5, 2026")
                         .font(.sasquatchRegular(12))
                         .foregroundStyle(Color.sasquatchText)
                 }
@@ -84,10 +92,14 @@ struct HomeView: View {
             .clipShape(RoundedRectangle(cornerRadius: 16))
 
             // Settings gear icon
-            Image(systemName: "gearshape.fill")
-                .font(.system(size: 12))
-                .foregroundStyle(Color.sasquatchText)
-                .padding(12)
+            Button {
+                navigationPath.append(HomeDestination.settings)
+            } label: {
+                Image(systemName: "gearshape.fill")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Color.sasquatchText)
+                    .padding(12)
+            }
         }
     }
 
@@ -298,9 +310,26 @@ struct HomeView: View {
         )
     }
 
+    // MARK: - Helpers
+
+    private var heightDisplay: String {
+        guard let cm = userProfile?.wingspan else { return "6'7\"" }
+        let totalInches = Int(round(cm / 2.54))
+        let feet = totalInches / 12
+        let inches = totalInches % 12
+        return "\(feet)'\(inches)\""
+    }
+
     // MARK: - Data
 
     private func loadData() async {
+        // Fetch user profile
+        do {
+            userProfile = try await api.getMe()
+        } catch {
+            print("Failed to load profile: \(error)")
+        }
+
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
         let dayFmt = DateFormatter()

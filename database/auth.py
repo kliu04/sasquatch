@@ -39,7 +39,8 @@ def get_current_user(
         # Auto-create user on first sign-in
         user = User(
             google_id=google_id,
-            username=decoded.get("name", ""),
+            username="Sasquatch",
+            wingspan=200.66,
         )
         db.add(user)
         db.commit()
