@@ -11,30 +11,17 @@ import sys
 import threading
 from pathlib import Path
 
-import cv2
-
-# Add hold-detector to path so we can import its modules
+# Add hold-detector to path so lazy imports can find it
 _HOLD_DETECTOR_DIR = Path(__file__).parent.parent / "hold-detector"
 if str(_HOLD_DETECTOR_DIR) not in sys.path:
     sys.path.insert(0, str(_HOLD_DETECTOR_DIR))
 
-import numpy as np
-
-from api.main import SasquatchEngine
-from api.route_service import build_routes
-from api.scan_service import (
-    ScanState,
-    draw_debug_overlay,
-    draw_routes_overlay,
-    prepare_scan,
-    process_scan,
-)
-from api.schemas import BBox, Hold, Position3D
-from hold_detector.app import HoldDetectionApp
-
 from database.db import SessionLocal
 from database.schema import Wall, WallStatus
 from database.storage import GCSStorage
+
+# Heavy ML imports (detectron2, torch, open3d, cv2) are deferred to method
+# bodies so the server can cold-start fast without loading them.
 
 
 class ScanWorker:

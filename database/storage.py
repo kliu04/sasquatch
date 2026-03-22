@@ -26,6 +26,17 @@ class GCSStorage:
         self._bucket_name = bucket_name or os.environ.get("GCS_BUCKET", "sasquatch-scans")
         self._client = storage.Client()
         self._bucket = self._client.bucket(self._bucket_name)
+        # On Cloud Run, default compute credentials can't locally sign URLs.
+        # Detect this and use IAM signBlob API instead.
+        self._signing_kwargs: dict = {}
+        creds = self._client._credentials
+        if hasattr(creds, "service_account_email") and not hasattr(creds, "sign_bytes"):
+            import google.auth.transport.requests
+            creds.refresh(google.auth.transport.requests.Request())
+            self._signing_kwargs = {
+                "service_account_email": creds.service_account_email,
+                "access_token": creds.token,
+            }
 
     def generate_upload_url(
         self,
@@ -40,6 +51,7 @@ class GCSStorage:
             expiration=timedelta(minutes=expiry_minutes),
             method="PUT",
             content_type=content_type,
+            **self._signing_kwargs,
         )
 
     def public_url(self, path: str) -> str:
@@ -53,6 +65,7 @@ class GCSStorage:
             version="v4",
             expiration=timedelta(minutes=expiry_minutes),
             method="GET",
+            **self._signing_kwargs,
         )
 
     def upload_bytes(self, data: bytes, path: str, content_type: str = "image/png") -> str:
