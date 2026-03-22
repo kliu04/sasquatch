@@ -26,17 +26,14 @@ struct ClimbPickerSheet: View {
         VStack(spacing: 16) {
             // Climb image
             if let urlStr = currentClimb.climbImgUrl, let url = URL(string: urlStr) {
-                GeometryReader { geo in
-                    CachedAsyncImage(url: url) { image in
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .frame(width: geo.size.width, height: geo.size.height)
-                    } placeholder: {
-                        imagePlaceholder
-                    }
+                CachedAsyncImage(url: url) { image in
+                    image
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(maxWidth: .infinity, maxHeight: 300)
+                } placeholder: {
+                    imagePlaceholder
                 }
-                .frame(height: 300)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
                 .id(urlStr)
             } else {
@@ -82,6 +79,7 @@ struct ClimbPickerSheet: View {
         .padding(16)
         .background(.white)
         .clipShape(RoundedRectangle(cornerRadius: 24))
+        .clipped()
         .padding(.horizontal, 24)
     }
 
