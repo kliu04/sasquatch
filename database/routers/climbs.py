@@ -218,6 +218,7 @@ def mark_sent(
     if climb is None:
         raise HTTPException(404, "Climb not found")
     climb.date_sent = datetime.now(timezone.utc)
+    climb.is_saved = True  # sent implies saved, otherwise invisible in list endpoints
     db.commit()
     db.refresh(climb)
     return _climb_response(climb)

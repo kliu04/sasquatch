@@ -34,6 +34,11 @@ struct HomeView: View {
             guard api.authToken != nil else { return }
             await loadData()
         }
+        .onChange(of: navigationPath.count) { _, newCount in
+            if newCount == 0 && api.authToken != nil {
+                Task { await loadData() }
+            }
+        }
     }
 
     // MARK: - Subviews
@@ -191,35 +196,59 @@ struct HomeView: View {
         await loadActivity()
     }
 
+    /// Parse ISO-8601 dates from the API.  The backend stores `DateTime`
+    /// **without** timezone (default=datetime.utcnow), so `.isoformat()`
+    /// produces naive strings like `"2026-03-22T14:30:00.123456"`.
+    /// `ISO8601DateFormatter` with `.withInternetDateTime` **requires** a
+    /// timezone designator and silently returns nil for naive strings.
+    /// This helper tries every format the API can return.
+    private func parseDate(_ string: String) -> Date? {
+        // 1. With timezone + fractional seconds  "…+00:00" / "…Z"
+        let isoFrac = ISO8601DateFormatter()
+        isoFrac.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let d = isoFrac.date(from: string) { return d }
+
+        // 2. With timezone, no fractional seconds
+        let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withInternetDateTime]
+        if let d = iso.date(from: string) { return d }
+
+        // 3. Naive datetime WITH fractional seconds (no timezone)
+        //    The API stores UTC but omits the timezone designator.
+        let df = DateFormatter()
+        df.locale = Locale(identifier: "en_US_POSIX")
+        df.timeZone = TimeZone(identifier: "UTC")
+        df.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSSSSS"
+        if let d = df.date(from: string) { return d }
+
+        // 4. Naive datetime WITHOUT fractional seconds
+        df.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
+        return df.date(from: string)
+    }
+
     private func loadStats() async {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
-        let formatter = DateFormatter()
-        formatter.dateFormat = "EEE"
+        let dayFmt = DateFormatter()
+        dayFmt.dateFormat = "EEE"
 
         // Build last 7 days labels
         var days: [(date: Date, label: String)] = []
         for i in (0..<7).reversed() {
             let date = calendar.date(byAdding: .day, value: -i, to: today)!
-            days.append((date, formatter.string(from: date)))
+            days.append((date, dayFmt.string(from: date)))
         }
 
         // Initialize counts
         var counts = days.map { (day: $0.label, count: 0) }
-
-        // Fetch sent climbs from all walls
-        let iso = ISO8601DateFormatter()
-        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let isoBasic = ISO8601DateFormatter()
-        isoBasic.formatOptions = [.withInternetDateTime]
 
         do {
             let walls = try await api.getWalls()
             for wall in walls {
                 guard let climbs = try? await api.getSavedClimbs(wallId: wall.id) else { continue }
                 for climb in climbs where climb.isSent {
-                    guard let dateStr = climb.dateSent else { continue }
-                    guard let sentDate = iso.date(from: dateStr) ?? isoBasic.date(from: dateStr) else { continue }
+                    guard let dateStr = climb.dateSent,
+                          let sentDate = parseDate(dateStr) else { continue }
                     let sentDay = calendar.startOfDay(for: sentDate)
                     if let idx = days.firstIndex(where: { calendar.isDate($0.date, inSameDayAs: sentDay) }) {
                         counts[idx].count += 1
@@ -235,17 +264,13 @@ struct HomeView: View {
 
     private func loadActivity() async {
         var events: [ActivityEvent] = []
-        let iso = ISO8601DateFormatter()
-        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let isoBasic = ISO8601DateFormatter()
-        isoBasic.formatOptions = [.withInternetDateTime]
 
         do {
             let walls = try await api.getWalls()
 
             // Wall creation events
             for wall in walls {
-                if let date = iso.date(from: wall.createdAt) ?? isoBasic.date(from: wall.createdAt) {
+                if let createdAt = wall.createdAt, let date = parseDate(createdAt) {
                     events.append(ActivityEvent(
                         date: date,
                         title: "Created wall \"\(wall.name)\"",
@@ -259,7 +284,7 @@ struct HomeView: View {
             for wall in walls {
                 guard let climbs = try? await api.getSavedClimbs(wallId: wall.id) else { continue }
                 for climb in climbs {
-                    if climb.isSaved, let createdAt = climb.createdAt, let date = iso.date(from: createdAt) ?? isoBasic.date(from: createdAt) {
+                    if climb.isSaved, let createdAt = climb.createdAt, let date = parseDate(createdAt) {
                         events.append(ActivityEvent(
                             date: date,
                             title: "Saved \(climb.displayName) on \"\(wall.name)\"",
@@ -267,8 +292,7 @@ struct HomeView: View {
                             color: Color.sasquatchTextSecondary
                         ))
                     }
-                    if let dateStr = climb.dateSent,
-                       let date = iso.date(from: dateStr) ?? isoBasic.date(from: dateStr) {
+                    if let dateStr = climb.dateSent, let date = parseDate(dateStr) {
                         events.append(ActivityEvent(
                             date: date,
                             title: "Sent \(climb.displayName) on \"\(wall.name)\"",

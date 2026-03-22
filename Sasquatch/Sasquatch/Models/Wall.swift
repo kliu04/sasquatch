@@ -25,7 +25,7 @@ struct WallSummary: Codable, Identifiable {
     let status: Wall.WallStatus
     let holdCount: Int?
     let wallImgUrl: String?
-    let createdAt: String
+    let createdAt: String?
 }
 
 struct WallCreateResponse: Codable {
