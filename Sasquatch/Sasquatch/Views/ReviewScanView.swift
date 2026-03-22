@@ -3,6 +3,7 @@ import SwiftUI
 struct ReviewScanView: View {
     let wallId: Int
     var onRetake: () -> Void
+    var onDone: ((Int) -> Void)?
 
     @Environment(APIClient.self) private var api
     @Environment(\.dismiss) private var dismiss
@@ -86,9 +87,11 @@ struct ReviewScanView: View {
                 imagePlaceholder
             }
 
-            // Status banner
-            statusBanner
-                .padding(12)
+            // Status banner (only show when not processing — placeholder handles that)
+            if !isProcessing {
+                statusBanner
+                    .padding(12)
+            }
         }
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .overlay(
@@ -155,6 +158,7 @@ struct ReviewScanView: View {
 
             TextField("e.g., North Wall", text: $wallName)
                 .font(.system(size: 16))
+                .foregroundStyle(Color.sasquatchTextSecondary)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
                 .background(.white)
@@ -235,7 +239,11 @@ struct ReviewScanView: View {
     }
 
     private func navigateToWall() async {
-        dismiss()
+        if let onDone {
+            onDone(wallId)
+        } else {
+            dismiss()
+        }
     }
 }
 

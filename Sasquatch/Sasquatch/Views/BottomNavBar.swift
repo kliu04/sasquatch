@@ -2,7 +2,7 @@ import SwiftUI
 
 struct BottomNavBar: View {
     @Binding var selectedTab: Int
-    var onHomeTapped: (() -> Void)?
+    var onTabTapped: (() -> Void)?
     var onScanTapped: () -> Void
 
     var body: some View {
@@ -10,7 +10,7 @@ struct BottomNavBar: View {
             Spacer()
 
             // Home
-            Button { selectedTab = 0; onHomeTapped?() } label: {
+            Button { selectedTab = 0; onTabTapped?() } label: {
                 Image(systemName: "house.fill")
                     .font(.system(size: 20))
                     .foregroundStyle(Color.sasquatchTextSecondary)
@@ -41,7 +41,7 @@ struct BottomNavBar: View {
             Spacer()
 
             // Walls
-            Button { selectedTab = 2 } label: {
+            Button { selectedTab = 2; onTabTapped?() } label: {
                 Image(systemName: "square.grid.2x2")
                     .font(.system(size: 20))
                     .foregroundStyle(Color.sasquatchTextSecondary)

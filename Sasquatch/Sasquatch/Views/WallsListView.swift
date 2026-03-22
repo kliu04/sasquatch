@@ -45,7 +45,7 @@ struct WallsListView: View {
                     ScrollView(showsIndicators: false) {
                         LazyVStack(spacing: 16) {
                             ForEach(walls) { wall in
-                                NavigationLink(destination: WallDetailView(wallId: wall.id).environment(api)) {
+                                NavigationLink(value: WallDestination.detail(wall.id)) {
                                     WallCard(wall: wall)
                                 }
                                 .buttonStyle(.plain)

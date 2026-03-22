@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct ScanCaptureView: View {
+    var onScanComplete: ((Int) -> Void)?
     @Environment(\.dismiss) private var dismiss
     @Environment(APIClient.self) private var api
     @State private var scanManager = ScanManager()
@@ -119,6 +120,8 @@ struct ScanCaptureView: View {
                     scanManager.exportedFiles = []
                     scanManager.hasCaptured = false
                     errorMessage = nil
+                }, onDone: { wallId in
+                    onScanComplete?(wallId)
                 })
                 .environment(api)
             }

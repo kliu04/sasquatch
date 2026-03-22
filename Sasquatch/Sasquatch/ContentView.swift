@@ -21,7 +21,14 @@ struct ContentView: View {
                             }
                         }
                         .navigationDestination(isPresented: $showScan) {
-                            ScanCaptureView()
+                            ScanCaptureView(onScanComplete: { wallId in
+                                showScan = false
+                                selectedTab = 2
+                                navigationPath = NavigationPath()
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                    navigationPath.append(WallDestination.detail(wallId))
+                                }
+                            })
                         }
                         .navigationDestination(for: HomeDestination.self) { dest in
                             switch dest {
@@ -33,10 +40,17 @@ struct ContentView: View {
                                     .environment(api)
                             }
                         }
+                        .navigationDestination(for: WallDestination.self) { dest in
+                            switch dest {
+                            case .detail(let id):
+                                WallDetailView(wallId: id)
+                                    .environment(api)
+                            }
+                        }
                     }
 
                     if !showScan {
-                        BottomNavBar(selectedTab: $selectedTab, onHomeTapped: {
+                        BottomNavBar(selectedTab: $selectedTab, onTabTapped: {
                             navigationPath = NavigationPath()
                         }) {
                             showScan = true
@@ -64,6 +78,10 @@ struct ContentView: View {
 enum HomeDestination: Hashable {
     case favourites
     case sent
+}
+
+enum WallDestination: Hashable {
+    case detail(Int)
 }
 
 #Preview {
