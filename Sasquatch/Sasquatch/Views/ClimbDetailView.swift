@@ -9,6 +9,7 @@ struct ClimbDetailView: View {
     @State private var currentClimb: Climb
     @State private var showShareSheet = false
     @State private var shareItems: [Any] = []
+    @State private var showDeleteConfirmation = false
 
     init(climb: Climb, wallName: String) {
         self.climb = climb
@@ -17,48 +18,107 @@ struct ClimbDetailView: View {
     }
 
     var body: some View {
-        ZStack(alignment: .top) {
-            Color.sasquatchBackground
-                .ignoresSafeArea()
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 0) {
+                // Blue header with back button and climb name
+                ZStack(alignment: .bottomLeading) {
+                    Color.sasquatchBlue
+                        .frame(height: 160)
 
-            Color.sasquatchAccent
-                .frame(height: 160)
-                .ignoresSafeArea(edges: .top)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Button { dismiss() } label: {
+                            Image(systemName: "arrow.left")
+                                .font(.system(size: 20, weight: .medium))
+                                .foregroundStyle(Color.sasquatchText)
+                                .frame(width: 44, height: 44)
+                                .contentShape(Rectangle())
+                        }
 
-            ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 16) {
-                    // Back button
-                    Button { dismiss() } label: {
-                        Image(systemName: "arrow.left")
-                            .font(.system(size: 18, weight: .medium))
-                            .foregroundStyle(Color.sasquatchTextSecondary)
+                        Text(currentClimb.displayName.uppercased())
+                            .font(.sasquatchTitle(24))
+                            .foregroundStyle(Color.sasquatchText)
                     }
-                    .padding(.bottom, -8)
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 16)
+                }
 
-                    // Climb name
-                    Text(currentClimb.displayName.uppercased())
-                        .font(.system(size: 30, weight: .black))
-                        .foregroundStyle(Color.sasquatchTextSecondary)
-                        .tracking(-0.6)
-
-                    // Route image
+                // Content
+                VStack(alignment: .leading, spacing: 16) {
                     routeImage
-
-                    // Tags + SENT badge row
                     tagsRow
-
-                    // Action buttons
                     actionButtons
-
-                    // Send button
                     sendButton
                 }
                 .padding(.horizontal, 24)
-                .padding(.bottom, 40)
+                .padding(.top, 20)
+                .padding(.bottom, 100)
             }
         }
+        .background(Color.sasquatchBackground)
+        .ignoresSafeArea(edges: .top)
         .navigationBarHidden(true)
         .background(SharePresenter(isPresented: $showShareSheet, items: shareItems))
+        .overlay {
+            if showDeleteConfirmation {
+                deleteConfirmationModal
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: showDeleteConfirmation)
+    }
+
+    // MARK: - Delete Confirmation
+
+    private var deleteConfirmationModal: some View {
+        ZStack {
+            Color.black.opacity(0.5)
+                .ignoresSafeArea()
+                .onTapGesture { showDeleteConfirmation = false }
+
+            VStack(spacing: 24) {
+                Text("Delete climb?")
+                    .font(.sasquatchTitle(20))
+                    .foregroundStyle(Color.sasquatchText)
+
+                HStack(spacing: 12) {
+                    Button {
+                        showDeleteConfirmation = false
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 14, weight: .semibold))
+                            Text("Cancel")
+                                .font(.sasquatchBody(16))
+                        }
+                        .foregroundStyle(Color.sasquatchText)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 44)
+                        .background(.white)
+                        .clipShape(Capsule())
+                        .overlay(Capsule().stroke(Color.sasquatchText, lineWidth: 1))
+                    }
+
+                    Button {
+                        Task { await deleteClimb() }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "trash")
+                                .font(.system(size: 14))
+                            Text("Delete")
+                                .font(.sasquatchButton(16))
+                        }
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 44)
+                        .background(Color.red)
+                        .clipShape(Capsule())
+                    }
+                }
+            }
+            .padding(24)
+            .background(.white)
+            .clipShape(RoundedRectangle(cornerRadius: 24))
+            .padding(.horizontal, 40)
+        }
     }
 
     // MARK: - Subviews
@@ -128,14 +188,28 @@ struct ClimbDetailView: View {
 
     private var actionButtons: some View {
         HStack(spacing: 8) {
-            ActionButton(icon: "bookmark", label: "Save", isActive: currentClimb.isSaved) {
+            ActionButton(icon: "bookmark", label: "Save", isActive: currentClimb.isSaved, activeColor: Color.sasquatchSent) {
                 Task { await toggleSave() }
             }
-            ActionButton(icon: "heart", label: "Favorite", isActive: currentClimb.isFavourite) {
+            ActionButton(icon: "heart", label: "Favorite", isActive: currentClimb.isFavourite, activeColor: Color.sasquatchFavourite) {
                 Task { await toggleFavourite() }
             }
             ActionButton(icon: "square.and.arrow.up", label: "Share", isActive: false) {
                 Task { await shareClimbImage() }
+            }
+            // Delete button
+            Button {
+                showDeleteConfirmation = true
+            } label: {
+                Image(systemName: "trash")
+                    .font(.system(size: 16))
+                    .foregroundStyle(Color.sasquatchTextSecondary)
+                    .frame(width: 47, height: 47)
+                    .background(.white)
+                    .clipShape(Circle())
+                    .overlay(
+                        Circle().stroke(Color.sasquatchTextSecondary, lineWidth: 1)
+                    )
             }
         }
     }
@@ -183,6 +257,16 @@ struct ClimbDetailView: View {
             )
         } catch {
             print("Failed to toggle favourite: \(error)")
+        }
+    }
+
+    private func deleteClimb() async {
+        do {
+            try await api.deleteClimb(wallId: currentClimb.wallId, climbId: currentClimb.id)
+            showDeleteConfirmation = false
+            dismiss()
+        } catch {
+            print("Failed to delete climb: \(error)")
         }
     }
 
@@ -268,6 +352,7 @@ struct ActionButton: View {
     let icon: String
     let label: String
     let isActive: Bool
+    var activeColor: Color = Color.sasquatchTextSecondary
     let action: () -> Void
 
     var body: some View {
@@ -275,16 +360,16 @@ struct ActionButton: View {
             HStack(spacing: 4) {
                 Image(systemName: isActive ? "\(icon).fill" : icon)
                     .font(.system(size: 16))
-                Text(label)
+                Text(isActive && label == "Save" ? "Saved" : label)
                     .font(.system(size: 14, weight: .semibold))
             }
-            .foregroundStyle(Color.sasquatchTextSecondary)
+            .foregroundStyle(isActive ? .white : Color.sasquatchTextSecondary)
             .frame(maxWidth: .infinity)
             .frame(height: 47)
-            .background(.white)
+            .background(isActive ? activeColor : .white)
             .clipShape(Capsule())
             .overlay(
-                Capsule().stroke(Color.sasquatchTextSecondary, lineWidth: 1)
+                isActive ? nil : Capsule().stroke(Color.sasquatchTextSecondary, lineWidth: 1)
             )
         }
     }

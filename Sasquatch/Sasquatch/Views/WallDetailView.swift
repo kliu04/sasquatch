@@ -58,7 +58,7 @@ struct WallDetailView: View {
                 }
                 .padding(.horizontal, 30)
                 .padding(.top, 24)
-                .padding(.bottom, 40)
+                .padding(.bottom, 100)
             }
         }
         .background(Color.sasquatchBackground)

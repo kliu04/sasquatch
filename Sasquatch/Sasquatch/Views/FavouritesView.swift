@@ -7,28 +7,30 @@ struct FavouritesView: View {
     @State private var isLoading = true
 
     var body: some View {
-        ZStack(alignment: .top) {
-            Color.sasquatchBackground
-                .ignoresSafeArea()
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 0) {
+                ZStack(alignment: .bottomLeading) {
+                    Color.sasquatchBlue
+                        .frame(height: 160)
 
-            Color.sasquatchAccent
-                .frame(height: 160)
-                .ignoresSafeArea(edges: .top)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Button { dismiss() } label: {
+                            Image(systemName: "arrow.left")
+                                .font(.system(size: 20, weight: .medium))
+                                .foregroundStyle(Color.sasquatchText)
+                                .frame(width: 44, height: 44)
+                                .contentShape(Rectangle())
+                        }
 
-            ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 24) {
-                    Button { dismiss() } label: {
-                        Image(systemName: "arrow.left")
-                            .font(.system(size: 20, weight: .medium))
+                        Text("Favourites")
+                            .font(.sasquatchTitle())
                             .foregroundStyle(Color.sasquatchText)
                     }
-                    .padding(.top, 4)
-                    .padding(.bottom, -16)
+                    .padding(.horizontal, 30)
+                    .padding(.bottom, 16)
+                }
 
-                    Text("Favourites")
-                        .font(.sasquatchTitle())
-                        .foregroundStyle(Color.sasquatchText)
-
+                VStack(alignment: .leading, spacing: 24) {
                     if isLoading {
                         ProgressView()
                             .frame(maxWidth: .infinity)
@@ -59,9 +61,12 @@ struct FavouritesView: View {
                     }
                 }
                 .padding(.horizontal, 30)
-                .padding(.bottom, 40)
+                .padding(.top, 24)
+                .padding(.bottom, 100)
             }
         }
+        .background(Color.sasquatchBackground)
+        .ignoresSafeArea(edges: .top)
         .navigationBarHidden(true)
         .task { await loadFavourites() }
     }

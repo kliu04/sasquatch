@@ -108,6 +108,10 @@ class APIClient {
         return try decoder.decode(Climb.self, from: data)
     }
 
+    func deleteClimb(wallId: Int, climbId: Int) async throws {
+        _ = try await request("/walls/\(wallId)/climbs/\(climbId)", method: "DELETE")
+    }
+
     // MARK: - Upload
 
     func uploadFile(to signedURL: String, data fileData: Data, contentType: String) async throws {

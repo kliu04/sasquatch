@@ -119,7 +119,7 @@ struct GenerateClimbSheet: View {
                     wallImagePlaceholder
                 }
             }
-            .frame(height: 220)
+            .frame(height: 300)
             .clipShape(RoundedRectangle(cornerRadius: 8))
             .id(urlStr)
         } else {
@@ -143,7 +143,7 @@ struct GenerateClimbSheet: View {
                 .font(.system(size: 40))
                 .foregroundStyle(.white.opacity(0.8))
         }
-        .frame(height: 220)
+        .frame(height: 300)
     }
 
     private var difficultySlider: some View {
