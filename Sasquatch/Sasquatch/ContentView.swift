@@ -5,16 +5,17 @@ struct ContentView: View {
     @State private var auth = AuthManager()
     @State private var selectedTab = 0
     @State private var showScan = false
+    @State private var navigationPath = NavigationPath()
 
     var body: some View {
         Group {
             if auth.isSignedIn {
                 ZStack(alignment: .bottom) {
-                    NavigationStack {
+                    NavigationStack(path: $navigationPath) {
                         Group {
                             switch selectedTab {
                             case 0:
-                                HomeView()
+                                HomeView(navigationPath: $navigationPath)
                             default:
                                 WallsListView()
                             }
@@ -22,15 +23,30 @@ struct ContentView: View {
                         .navigationDestination(isPresented: $showScan) {
                             ScanCaptureView()
                         }
+                        .navigationDestination(for: HomeDestination.self) { dest in
+                            switch dest {
+                            case .favourites:
+                                FavouritesView()
+                                    .environment(api)
+                            case .sent:
+                                SentClimbsView()
+                                    .environment(api)
+                            }
+                        }
                     }
 
                     if !showScan {
-                        BottomNavBar(selectedTab: $selectedTab) {
+                        BottomNavBar(selectedTab: $selectedTab, onHomeTapped: {
+                            navigationPath = NavigationPath()
+                        }) {
                             showScan = true
                         }
                     }
                 }
                 .ignoresSafeArea(.keyboard)
+                .onChange(of: selectedTab) {
+                    navigationPath = NavigationPath()
+                }
             } else {
                 SignInView()
             }
@@ -43,6 +59,11 @@ struct ContentView: View {
             api.authToken = auth.authToken
         }
     }
+}
+
+enum HomeDestination: Hashable {
+    case favourites
+    case sent
 }
 
 #Preview {

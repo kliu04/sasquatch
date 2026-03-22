@@ -4,8 +4,7 @@ import Charts
 struct HomeView: View {
     @Environment(APIClient.self) private var api
     @Environment(AuthManager.self) private var auth
-    @State private var navigateToFavs = false
-    @State private var navigateToSent = false
+    @Binding var navigationPath: NavigationPath
 
     // Mock weekly stats data
     private let weeklyStats: [(day: String, count: Int)] = [
@@ -117,7 +116,10 @@ struct HomeView: View {
     }
 
     private func quickActionButton(title: String) -> some View {
-        Button {} label: {
+        Button {
+            if title == "favs" { navigationPath.append(HomeDestination.favourites) }
+            if title == "sent" { navigationPath.append(HomeDestination.sent) }
+        } label: {
             Text(title)
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(Color.sasquatchTextSecondary)
@@ -153,6 +155,6 @@ struct HomeView: View {
 }
 
 #Preview {
-    HomeView()
+    HomeView(navigationPath: .constant(NavigationPath()))
         .environment(APIClient())
 }
