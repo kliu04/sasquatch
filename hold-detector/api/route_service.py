@@ -16,8 +16,8 @@ DIFFICULTY_BUDGETS: dict[str, float] = {
 }
 
 STYLE_PARAMS: dict[str, dict] = {
-    "static":  {"mn": 0.15, "mx": 0.80, "alpha": 1.5, "max_downward_frac": 0.10},
-    "dynamic": {"mn": 0.30, "mx": 1.50, "alpha": 0.5, "max_downward_frac": 0.15},
+    "static":  {"mn": 0.10, "mx": 1.20, "alpha": 1.5, "max_downward_frac": 0.10},
+    "dynamic": {"mn": 0.30, "mx": 1.80, "alpha": 0.5, "max_downward_frac": 0.20},
 }
 
 _EPSILON = 1e-6
@@ -88,6 +88,57 @@ def _edge_cost(a: _Node, b: _Node, dist: float, alpha: float) -> float:
     return dist + alpha * b.difficulty
 
 
+# Target average hold difficulty for each difficulty level (0=easiest, 1=hardest)
+_DIFFICULTY_TARGETS: dict[str, float] = {"easy": 0.25, "medium": 0.50, "hard": 0.75}
+
+
+def _score_route(
+    path: list[int],
+    graph: _Graph,
+    style: str,
+    difficulty: str,
+) -> float:
+    """Score a route higher = better. Considers coverage, style fit, difficulty match."""
+    if len(path) < 2:
+        return 0.0
+
+    nodes = [graph.nodes[hid] for hid in path]
+
+    # 1. Coverage: more holds = better (uses more of the wall)
+    coverage = len(path) / max(len(graph.nodes), 1)
+
+    # 2. Style fit: static prefers short moves, dynamic prefers long moves
+    move_dists = [_dist3d(nodes[i], nodes[i + 1]) for i in range(len(nodes) - 1)]
+    avg_dist = sum(move_dists) / len(move_dists)
+    params = STYLE_PARAMS[style]
+    ideal_dist = params["mn"] if style == "static" else params["mx"]
+    style_fit = 1.0 / (1.0 + abs(avg_dist - ideal_dist))
+
+    # 3. Difficulty match: route avg difficulty should match the target
+    avg_diff = sum(n.difficulty for n in nodes) / len(nodes)
+    target = _DIFFICULTY_TARGETS.get(difficulty, 0.5)
+    diff_fit = 1.0 / (1.0 + abs(avg_diff - target))
+
+    return coverage * 0.3 + style_fit * 0.4 + diff_fit * 0.3
+
+
+def _dedupe_routes(routes: list[list[int]], max_overlap: float = 0.70) -> list[list[int]]:
+    """Remove routes that share >max_overlap fraction of holds with a higher-scored route."""
+    kept: list[list[int]] = []
+    for route in routes:
+        route_set = set(route)
+        duplicate = False
+        for existing in kept:
+            existing_set = set(existing)
+            overlap = len(route_set & existing_set) / max(len(route_set), 1)
+            if overlap > max_overlap:
+                duplicate = True
+                break
+        if not duplicate:
+            kept.append(route)
+    return kept
+
+
 # ---------------------------------------------------------------------------
 # Graph passes
 # ---------------------------------------------------------------------------
@@ -104,7 +155,7 @@ def _build_graph(holds: list[Hold], alpha: float) -> _Graph:
             z3d=hold.position.z,
             px_y=px_cy,
             depth=hold.depth,
-            area=int(hold.confidence * 10_000),  # proxy: use confidence-scaled area
+            area=int((hold.bbox.x2 - hold.bbox.x1) * (hold.bbox.y2 - hold.bbox.y1)),
         ))
 
     nodes = list(g.nodes.values())
@@ -156,14 +207,23 @@ def _search_routes(
 
     max_downward_px = y_range * STYLE_PARAMS[style]["max_downward_frac"]
 
+    # Cap total DFS iterations to avoid combinatorial explosion on dense graphs.
+    MAX_ITERATIONS = 100_000
     results: list[tuple[float, list[int]]] = []
+    iterations = 0
 
     def dfs(cur_id: int, remaining: float, path: list[int], visited: set[int]) -> None:
+        nonlocal iterations
+        iterations += 1
+        if iterations > MAX_ITERATIONS:
+            return
         if cur_id in top_ids:
             results.append((remaining, list(path)))
             return
         cur_py = graph.nodes[cur_id].px_y
         for nb_id, cost in graph.adj[cur_id]:
+            if iterations > MAX_ITERATIONS:
+                return
             if nb_id in visited:
                 continue
             if graph.nodes[nb_id].px_y > cur_py + max_downward_px:
@@ -177,7 +237,11 @@ def _search_routes(
             visited.remove(nb_id)
 
     for start_id in bottom_ids:
+        if iterations > MAX_ITERATIONS:
+            break
         dfs(start_id, budget, [start_id], {start_id})
+
+    print(f"[routes] DFS explored {iterations} nodes, found {len(results)} routes (cap={MAX_ITERATIONS})", flush=True)
 
     results.sort(key=lambda p: p[0])
     return [path for _, path in results[:top_k]]
@@ -217,8 +281,22 @@ def build_routes(
     alpha: float = params["alpha"]
 
     g = _build_graph(holds, alpha=alpha)
+    print(f"[routes] full graph: {len(g.nodes)} nodes, {g.edge_count()} directed edges", flush=True)
     _sparsify(g, mn, mx)
+    print(f"[routes] after sparsify (mn={mn}, mx={mx}): {g.edge_count()} directed edges", flush=True)
+    # Log degree distribution
+    degrees = [len(neighbors) for neighbors in g.adj.values()]
+    if degrees:
+        avg_deg = sum(degrees) / len(degrees)
+        max_deg = max(degrees)
+        print(f"[routes] avg degree={avg_deg:.1f}, max degree={max_deg}", flush=True)
     candidates = _search_routes(g, budget, style=style, top_k=top_k)
+    print(f"[routes] DFS found {len(candidates)} routes", flush=True)
 
-    # Pass 4: Gemini filter stub
-    return candidates[:gemini_k]
+    # Score, dedupe, return top results
+    scored = [(_score_route(r, g, style, difficulty), r) for r in candidates]
+    scored.sort(key=lambda x: x[0], reverse=True)
+    ranked = [r for _, r in scored]
+    diverse = _dedupe_routes(ranked)
+    print(f"[routes] after scoring+dedup: {len(diverse)} diverse routes", flush=True)
+    return diverse[:gemini_k]

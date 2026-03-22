@@ -26,8 +26,17 @@ class HoldDetectionApp:
         This is the primary method for API use. Pass image_name for logging; image_bgr
         is a BGR numpy array as returned by cv2.imread / read_image.
         """
+        import time
+
+        t0 = time.perf_counter()
+        print(f"[detect] {image_name}: starting Detectron2 inference", flush=True)
         instances = self.detectron.predict(image_bgr)
+        t1 = time.perf_counter()
+        print(f"[detect] {image_name}: Detectron2 done in {t1 - t0:.1f}s", flush=True)
+
         processed = self.postprocess.process(instances, image_bgr)
+        t2 = time.perf_counter()
+        print(f"[detect] {image_name}: postprocess done in {t2 - t1:.1f}s — {len(processed.records)} candidates", flush=True)
 
         records = processed.records
         masks = processed.masks
@@ -35,6 +44,7 @@ class HoldDetectionApp:
         if self.gemini:
             api_key = resolve_api_key(self.config.gemini)
             if api_key:
+                print(f"[detect] {image_name}: starting Gemini filter for {len(records)} candidates", flush=True)
                 output_dir = ensure_dir(self.config.output.output_dir.resolve())
                 records, masks = self.gemini.filter_tape(
                     image_name,
@@ -44,7 +54,13 @@ class HoldDetectionApp:
                     output_dir,
                     api_key,
                 )
+                t3 = time.perf_counter()
+                print(f"[detect] {image_name}: Gemini filter done in {t3 - t2:.1f}s — {len(records)} holds kept", flush=True)
+            else:
+                print(f"[detect] {image_name}: Gemini enabled but no API key found, skipping", flush=True)
 
+        total = time.perf_counter() - t0
+        print(f"[detect] {image_name}: total detect pipeline {total:.1f}s", flush=True)
         return records
 
     def run(self) -> int:

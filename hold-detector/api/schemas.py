@@ -5,7 +5,14 @@ from pydantic import BaseModel
 
 class ScanResponse(BaseModel):
     scan_id: str
+    status: str
     frame_count: int
+
+
+class ScanStatusResponse(BaseModel):
+    scan_id: str
+    status: str
+    error: str | None = None
 
 
 class Position3D(BaseModel):
