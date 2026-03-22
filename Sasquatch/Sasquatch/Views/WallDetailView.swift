@@ -13,6 +13,8 @@ struct WallDetailView: View {
     @State private var isLoading = true
     @State private var showGenerateSheet = false
     @State private var showClimbPicker = false
+    @State private var showShareSheet = false
+    @State private var shareItems: [Any] = []
 
     init(wallId: Int, previewWall: Wall? = nil, previewClimbs: [Climb]? = nil) {
         self.wallId = wallId
@@ -95,6 +97,10 @@ struct WallDetailView: View {
                 ClimbPickerSheet(
                     climbs: generatedClimbs,
                     wallId: wallId,
+                    onShare: { items in
+                        shareItems = items
+                        showShareSheet = true
+                    },
                     onSave: {
                         showClimbPicker = false
                         generatedClimbs = []
@@ -110,6 +116,7 @@ struct WallDetailView: View {
             }
         }
         .animation(.easeInOut(duration: 0.25), value: showClimbPicker)
+        .background(SharePresenter(isPresented: $showShareSheet, items: shareItems))
     }
 
     // MARK: - Subviews

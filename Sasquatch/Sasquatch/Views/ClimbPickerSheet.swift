@@ -3,18 +3,18 @@ import SwiftUI
 struct ClimbPickerSheet: View {
     let climbs: [Climb]
     let wallId: Int
+    var onShare: ([Any]) -> Void
     var onSave: () -> Void
     var onDismiss: () -> Void
 
     @Environment(APIClient.self) private var api
     @State private var selectedIndex = 0
     @State private var currentClimbs: [Climb]
-    @State private var showShareSheet = false
-    @State private var shareItems: [Any] = []
 
-    init(climbs: [Climb], wallId: Int, onSave: @escaping () -> Void, onDismiss: @escaping () -> Void) {
+    init(climbs: [Climb], wallId: Int, onShare: @escaping ([Any]) -> Void, onSave: @escaping () -> Void, onDismiss: @escaping () -> Void) {
         self.climbs = climbs
         self.wallId = wallId
+        self.onShare = onShare
         self.onSave = onSave
         self.onDismiss = onDismiss
         self._currentClimbs = State(initialValue: climbs)
@@ -79,9 +79,6 @@ struct ClimbPickerSheet: View {
         .background(.white)
         .clipShape(RoundedRectangle(cornerRadius: 24))
         .padding(.horizontal, 24)
-        .sheet(isPresented: $showShareSheet) {
-            ShareSheet(items: shareItems)
-        }
     }
 
     private var imagePlaceholder: some View {
@@ -149,16 +146,20 @@ struct ClimbPickerSheet: View {
     private func shareClimb() async {
         var items: [Any] = ["\(currentClimb.displayName) - Sasquatch"]
         if let urlStr = currentClimb.climbImgUrl, let url = URL(string: urlStr) {
-            do {
-                let (data, _) = try await URLSession.shared.data(from: url)
-                if let image = UIImage(data: data) {
-                    items.insert(image, at: 0)
+            if let cached = ImageCache.shared.get(url) {
+                items.insert(cached, at: 0)
+            } else {
+                do {
+                    let (data, _) = try await URLSession.shared.data(from: url)
+                    if let image = UIImage(data: data) {
+                        ImageCache.shared.set(image, for: url)
+                        items.insert(image, at: 0)
+                    }
+                } catch {
+                    print("Failed to download image for sharing: \(error)")
                 }
-            } catch {
-                print("Failed to download image for sharing: \(error)")
             }
         }
-        shareItems = items
-        showShareSheet = true
+        onShare(items)
     }
 }

@@ -58,9 +58,7 @@ struct ClimbDetailView: View {
             }
         }
         .navigationBarHidden(true)
-        .sheet(isPresented: $showShareSheet) {
-            ShareSheet(items: shareItems)
-        }
+        .background(SharePresenter(isPresented: $showShareSheet, items: shareItems))
     }
 
     // MARK: - Subviews
@@ -203,13 +201,18 @@ struct ClimbDetailView: View {
         var items: [Any] = ["\(currentClimb.displayName) - Sasquatch"]
 
         if let urlStr = currentClimb.climbImgUrl, let url = URL(string: urlStr) {
-            do {
-                let (data, _) = try await URLSession.shared.data(from: url)
-                if let image = UIImage(data: data) {
-                    items.insert(image, at: 0)
+            if let cached = ImageCache.shared.get(url) {
+                items.insert(cached, at: 0)
+            } else {
+                do {
+                    let (data, _) = try await URLSession.shared.data(from: url)
+                    if let image = UIImage(data: data) {
+                        ImageCache.shared.set(image, for: url)
+                        items.insert(image, at: 0)
+                    }
+                } catch {
+                    print("Failed to download image for sharing: \(error)")
                 }
-            } catch {
-                print("Failed to download image for sharing: \(error)")
             }
         }
 
@@ -219,15 +222,29 @@ struct ClimbDetailView: View {
 }
 
 // MARK: - Share Sheet
+//
+// UIActivityViewController must be PRESENTED modally — it can't be embedded
+// inside a SwiftUI .sheet() (which wraps it in another modal, causing a blank
+// screen).  This UIViewControllerRepresentable places an invisible host VC in
+// the view hierarchy and calls present() directly when isPresented flips to true.
 
-struct ShareSheet: UIViewControllerRepresentable {
+struct SharePresenter: UIViewControllerRepresentable {
+    @Binding var isPresented: Bool
     let items: [Any]
 
-    func makeUIViewController(context: Context) -> UIActivityViewController {
-        UIActivityViewController(activityItems: items, applicationActivities: nil)
+    func makeUIViewController(context: Context) -> UIViewController {
+        UIViewController()
     }
 
-    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
+    func updateUIViewController(_ vc: UIViewController, context: Context) {
+        if isPresented && vc.presentedViewController == nil {
+            let activity = UIActivityViewController(activityItems: items, applicationActivities: nil)
+            activity.completionWithItemsHandler = { _, _, _, _ in
+                isPresented = false
+            }
+            vc.present(activity, animated: true)
+        }
+    }
 }
 
 // MARK: - Tag Pill

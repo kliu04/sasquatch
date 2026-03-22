@@ -8,7 +8,6 @@ struct CachedAsyncImage<Content: View, Placeholder: View>: View {
     @ViewBuilder let placeholder: () -> Placeholder
 
     @State private var image: UIImage?
-    @State private var isLoading = false
 
     var body: some View {
         if let image {
@@ -16,14 +15,14 @@ struct CachedAsyncImage<Content: View, Placeholder: View>: View {
         } else {
             placeholder()
                 .task(id: url) {
-                    guard let url, !isLoading else { return }
+                    guard let url else { return }
                     if let cached = ImageCache.shared.get(url) {
                         image = cached
                         return
                     }
-                    isLoading = true
                     do {
                         let (data, _) = try await URLSession.shared.data(from: url)
+                        guard !Task.isCancelled else { return }
                         if let downloaded = UIImage(data: data) {
                             ImageCache.shared.set(downloaded, for: url)
                             image = downloaded
@@ -31,7 +30,6 @@ struct CachedAsyncImage<Content: View, Placeholder: View>: View {
                     } catch {
                         // stay on placeholder
                     }
-                    isLoading = false
                 }
         }
     }
