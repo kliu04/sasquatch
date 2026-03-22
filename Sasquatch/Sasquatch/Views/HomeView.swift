@@ -301,7 +301,9 @@ struct HomeView: View {
                 }
             }
         }
-        .padding(21)
+        .padding(.horizontal, 21)
+        .padding(.top, 21)
+        .padding(.bottom, 8)
         .background(.white)
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .overlay(
